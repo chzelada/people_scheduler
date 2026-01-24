@@ -1,55 +1,106 @@
 import React, { useEffect, useState } from 'react';
 import { Plus, Trash2, Search } from 'lucide-react';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, startOfMonth, endOfMonth, eachWeekOfInterval } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Button, Modal, Input, Textarea, Table } from '../components/common';
+import { Button, Modal, Textarea, Table } from '../components/common';
 import { useUnavailabilityStore } from '../stores/unavailabilityStore';
 import { usePeopleStore } from '../stores/peopleStore';
 import type { Unavailability } from '../types';
+
+const months = [
+  { value: 1, label: 'Enero' },
+  { value: 2, label: 'Febrero' },
+  { value: 3, label: 'Marzo' },
+  { value: 4, label: 'Abril' },
+  { value: 5, label: 'Mayo' },
+  { value: 6, label: 'Junio' },
+  { value: 7, label: 'Julio' },
+  { value: 8, label: 'Agosto' },
+  { value: 9, label: 'Septiembre' },
+  { value: 10, label: 'Octubre' },
+  { value: 11, label: 'Noviembre' },
+  { value: 12, label: 'Diciembre' },
+];
 
 export function UnavailabilityManagement() {
   const { unavailability, fetchAll, create, delete: deleteUnavailability, isLoading } = useUnavailabilityStore();
   const { people, fetchPeople } = usePeopleStore();
 
+  const today = new Date();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [personSearchQuery, setPersonSearchQuery] = useState('');
+  const [selectedMonth, setSelectedMonth] = useState(today.getMonth() + 1);
+  const [selectedYear, setSelectedYear] = useState(today.getFullYear());
+  const [selectedSundays, setSelectedSundays] = useState<string[]>([]);
   const [formData, setFormData] = useState({
     person_id: '',
-    start_date: '',
-    end_date: '',
     reason: '',
     recurring: false,
   });
+
+  const years = Array.from({ length: 5 }, (_, i) => today.getFullYear() - 1 + i);
 
   useEffect(() => {
     fetchAll();
     fetchPeople();
   }, []);
 
+  // Get all Sundays for the selected month
+  const getSundaysInMonth = (): Date[] => {
+    const start = startOfMonth(new Date(selectedYear, selectedMonth - 1));
+    const end = endOfMonth(new Date(selectedYear, selectedMonth - 1));
+    const sundays: Date[] = [];
+
+    const weeks = eachWeekOfInterval({ start, end }, { weekStartsOn: 0 });
+    for (const weekStart of weeks) {
+      if (weekStart >= start && weekStart <= end) {
+        sundays.push(weekStart);
+      }
+    }
+
+    return sundays;
+  };
+
+  const sundaysInMonth = getSundaysInMonth();
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await create({
-      person_id: formData.person_id,
-      start_date: formData.start_date,
-      end_date: formData.end_date,
-      reason: formData.reason || undefined,
-      recurring: formData.recurring,
-    });
+
+    // Create one unavailability record per selected Sunday
+    for (const sundayDate of selectedSundays) {
+      await create({
+        person_id: formData.person_id,
+        start_date: sundayDate,
+        end_date: sundayDate,
+        reason: formData.reason || undefined,
+        recurring: formData.recurring,
+      });
+    }
+
+    closeModal();
+  };
+
+  const closeModal = () => {
     setIsModalOpen(false);
     setPersonSearchQuery('');
+    setSelectedSundays([]);
     setFormData({
       person_id: '',
-      start_date: '',
-      end_date: '',
       reason: '',
       recurring: false,
     });
   };
 
   const handleDelete = async (record: Unavailability) => {
-    if (window.confirm('¿Eliminar este registro de ausencia?')) {
-      await deleteUnavailability(record.id);
-    }
+    await deleteUnavailability(record.id);
+  };
+
+  const toggleSunday = (dateStr: string) => {
+    setSelectedSundays(prev =>
+      prev.includes(dateStr)
+        ? prev.filter(d => d !== dateStr)
+        : [...prev, dateStr]
+    );
   };
 
   const columns = [
@@ -61,11 +112,11 @@ export function UnavailabilityManagement() {
       ),
     },
     {
-      key: 'dates',
-      header: 'Fechas',
+      key: 'date',
+      header: 'Fecha',
       render: (record: Unavailability) => (
         <span>
-          {format(parseISO(record.start_date), "d 'de' MMM, yyyy", { locale: es })} - {format(parseISO(record.end_date), "d 'de' MMM, yyyy", { locale: es })}
+          {format(parseISO(record.start_date), "EEEE d 'de' MMMM, yyyy", { locale: es })}
         </span>
       ),
     },
@@ -133,13 +184,11 @@ export function UnavailabilityManagement() {
 
       <Modal
         isOpen={isModalOpen}
-        onClose={() => {
-          setIsModalOpen(false);
-          setPersonSearchQuery('');
-        }}
+        onClose={closeModal}
         title="Agregar Ausencia"
       >
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Person Selection */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Persona</label>
             {selectedPerson ? (
@@ -192,21 +241,68 @@ export function UnavailabilityManagement() {
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <Input
-              label="Fecha de Inicio"
-              type="date"
-              value={formData.start_date}
-              onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
-              required
-            />
-            <Input
-              label="Fecha de Fin"
-              type="date"
-              value={formData.end_date}
-              onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
-              required
-            />
+          {/* Month/Year Selection */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Mes</label>
+            <div className="flex gap-2">
+              <select
+                value={selectedMonth}
+                onChange={(e) => {
+                  setSelectedMonth(parseInt(e.target.value));
+                  setSelectedSundays([]);
+                }}
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              >
+                {months.map((m) => (
+                  <option key={m.value} value={m.value}>{m.label}</option>
+                ))}
+              </select>
+              <select
+                value={selectedYear}
+                onChange={(e) => {
+                  setSelectedYear(parseInt(e.target.value));
+                  setSelectedSundays([]);
+                }}
+                className="w-24 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              >
+                {years.map((y) => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Sunday Selection */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Seleccionar Domingos ({selectedSundays.length} seleccionados)
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              {sundaysInMonth.map((sunday) => {
+                const dateStr = format(sunday, 'yyyy-MM-dd');
+                const isSelected = selectedSundays.includes(dateStr);
+                return (
+                  <label
+                    key={dateStr}
+                    className={`flex items-center p-2 rounded-lg border cursor-pointer transition-colors ${
+                      isSelected
+                        ? 'bg-primary-50 border-primary-300'
+                        : 'bg-white border-gray-200 hover:bg-gray-50'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => toggleSunday(dateStr)}
+                      className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                    />
+                    <span className="ml-2 text-sm">
+                      {format(sunday, "d 'de' MMMM", { locale: es })}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
           </div>
 
           <Textarea
@@ -224,19 +320,20 @@ export function UnavailabilityManagement() {
               className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
             />
             <span className="ml-2 text-sm text-gray-700">
-              Recurrente anualmente (ej. vacaciones en las mismas fechas cada año)
+              Recurrente anualmente
             </span>
           </label>
 
           <div className="flex justify-end space-x-3 pt-4">
-            <Button type="button" variant="secondary" onClick={() => {
-              setIsModalOpen(false);
-              setPersonSearchQuery('');
-            }}>
+            <Button type="button" variant="secondary" onClick={closeModal}>
               Cancelar
             </Button>
-            <Button type="submit" isLoading={isLoading}>
-              Agregar Ausencia
+            <Button
+              type="submit"
+              isLoading={isLoading}
+              disabled={!formData.person_id || selectedSundays.length === 0}
+            >
+              Agregar {selectedSundays.length > 0 ? `(${selectedSundays.length})` : ''}
             </Button>
           </div>
         </form>

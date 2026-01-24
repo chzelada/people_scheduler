@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import type { FairnessScore } from '../../types';
+import { PersonHistoryModal } from './PersonHistoryModal';
 
 interface FairnessReportProps {
   scores: FairnessScore[];
@@ -10,6 +11,7 @@ interface FairnessReportProps {
 
 export function FairnessReport({ scores, year }: FairnessReportProps) {
   const maxAssignments = Math.max(...scores.map((s) => s.assignments_this_year), 1);
+  const [selectedPerson, setSelectedPerson] = useState<{ id: string; name: string } | null>(null);
 
   const getJobCount = (score: FairnessScore, jobName: string): number => {
     const job = score.assignments_by_job?.find(
@@ -47,8 +49,13 @@ export function FairnessReport({ scores, year }: FairnessReportProps) {
 
           return (
             <div key={score.person_id} className="flex items-center space-x-4">
-              <div className="w-40 text-sm text-gray-900 truncate">
-                {score.person_name}
+              <div className="w-40 text-sm truncate">
+                <button
+                  onClick={() => setSelectedPerson({ id: score.person_id, name: score.person_name })}
+                  className="text-primary-600 hover:text-primary-800 hover:underline font-medium text-left"
+                >
+                  {score.person_name}
+                </button>
               </div>
               <div className="flex-1">
                 <div className="h-4 bg-gray-100 rounded-full overflow-hidden">
@@ -87,6 +94,16 @@ export function FairnessReport({ scores, year }: FairnessReportProps) {
         <div className="text-center py-8 text-gray-500">
           No hay datos de asignaciones para {year}
         </div>
+      )}
+
+      {/* Person History Modal */}
+      {selectedPerson && (
+        <PersonHistoryModal
+          isOpen={!!selectedPerson}
+          onClose={() => setSelectedPerson(null)}
+          personId={selectedPerson.id}
+          personName={selectedPerson.name}
+        />
       )}
     </div>
   );

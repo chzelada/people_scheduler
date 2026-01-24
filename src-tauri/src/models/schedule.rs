@@ -135,3 +135,23 @@ pub struct FairnessScore {
     pub last_assignment_date: Option<NaiveDate>,
     pub fairness_score: f64,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EligiblePerson {
+    pub id: String,
+    pub first_name: String,
+    pub last_name: String,
+    pub is_available: bool,
+    pub is_qualified: bool,
+    pub passes_consecutive_check: bool,
+    pub sibling_status: String, // "preferred", "neutral", "forbidden"
+    pub assignments_this_year: i32,
+    pub reason_if_ineligible: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GetEligiblePeopleRequest {
+    pub job_id: String,
+    pub service_date: String,
+    pub current_person_id: Option<String>,
+}

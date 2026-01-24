@@ -1,7 +1,8 @@
 use crate::db::with_db;
 use crate::models::{
-    Assignment, FairnessScore, GenerateScheduleRequest, JobAssignmentCount, Schedule,
-    SchedulePreview, ScheduleStatus, ServiceDate, UpdateAssignmentRequest,
+    Assignment, EligiblePerson, FairnessScore, GenerateScheduleRequest, GetEligiblePeopleRequest,
+    JobAssignmentCount, PairingRule, Person, Schedule, SchedulePreview, ScheduleStatus,
+    ServiceDate, SiblingGroup, UpdateAssignmentRequest,
 };
 use crate::scheduler::ScheduleGenerator;
 use chrono::{Datelike, NaiveDate};
@@ -123,6 +124,28 @@ pub fn get_schedule(id: String) -> Result<Schedule, String> {
 
 #[tauri::command]
 pub fn generate_schedule(request: GenerateScheduleRequest) -> Result<SchedulePreview, String> {
+    // Check if schedule for this month/year already exists
+    let existing = with_db(|conn| {
+        let mut stmt = conn.prepare(
+            "SELECT id, name FROM schedules WHERE year = ? AND month = ?"
+        )?;
+
+        match stmt.query_row(duckdb::params![request.year, request.month], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        }) {
+            Ok((_, name)) => Ok(Some(name)),
+            Err(duckdb::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e),
+        }
+    })?;
+
+    if let Some(schedule_name) = existing {
+        return Err(format!(
+            "Ya existe un horario para este mes: '{}'. Debe eliminarlo antes de generar uno nuevo.",
+            schedule_name
+        ));
+    }
+
     let generator = ScheduleGenerator::new();
     generator.generate(request)
 }
@@ -402,4 +425,307 @@ pub fn get_schedule_by_month(year: i32, month: i32) -> Result<Option<Schedule>, 
         Some(id) => Ok(Some(get_schedule(id)?)),
         None => Ok(None),
     }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct PersonAssignmentDetail {
+    pub service_date: String,
+    pub job_name: String,
+}
+
+#[tauri::command]
+pub fn get_person_assignment_history(
+    person_id: String,
+    start_date: String,
+    end_date: String,
+) -> Result<Vec<PersonAssignmentDetail>, String> {
+    with_db(|conn| {
+        let mut stmt = conn.prepare(
+            "SELECT CAST(ah.service_date AS VARCHAR), j.name
+             FROM assignment_history ah
+             INNER JOIN jobs j ON ah.job_id = j.id
+             WHERE ah.person_id = ?
+               AND ah.service_date >= ?
+               AND ah.service_date <= ?
+             ORDER BY ah.service_date"
+        )?;
+
+        let history: Vec<PersonAssignmentDetail> = stmt
+            .query_map(duckdb::params![&person_id, &start_date, &end_date], |row| {
+                Ok(PersonAssignmentDetail {
+                    service_date: row.get(0)?,
+                    job_name: row.get(1)?,
+                })
+            })?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        Ok(history)
+    })
+}
+
+#[tauri::command]
+pub fn get_eligible_people_for_assignment(
+    request: GetEligiblePeopleRequest,
+) -> Result<Vec<EligiblePerson>, String> {
+    let job_id = request.job_id;
+    let service_date_str = request.service_date.clone();
+    let current_person_id = request.current_person_id.unwrap_or_default();
+
+    let service_date = NaiveDate::parse_from_str(&service_date_str, "%Y-%m-%d")
+        .unwrap_or_else(|_| NaiveDate::from_ymd_opt(2024, 1, 1).unwrap());
+
+    with_db(|conn| {
+
+        // Get all active people
+        let mut people_stmt = conn.prepare(
+            "SELECT id, first_name, last_name, preferred_frequency, max_consecutive_weeks, preference_level
+             FROM people
+             WHERE active = TRUE"
+        )?;
+
+        let people: Vec<Person> = people_stmt
+            .query_map([], |row| {
+                Ok(Person {
+                    id: row.get(0)?,
+                    first_name: row.get(1)?,
+                    last_name: row.get(2)?,
+                    email: None,
+                    phone: None,
+                    preferred_frequency: crate::models::PreferredFrequency::from_str(
+                        &row.get::<_, String>(3).unwrap_or_default(),
+                    ),
+                    max_consecutive_weeks: row.get(4)?,
+                    preference_level: row.get(5)?,
+                    active: true,
+                    notes: None,
+                    created_at: None,
+                    updated_at: None,
+                    job_ids: Vec::new(),
+                })
+            })?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        // Get job assignments for each person
+        let mut job_assign_stmt = conn.prepare(
+            "SELECT person_id, job_id FROM person_jobs"
+        )?;
+
+        let job_assignments: Vec<(String, String)> = job_assign_stmt
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        // Get unavailability records
+        let mut unavail_stmt = conn.prepare(
+            "SELECT person_id, CAST(start_date AS VARCHAR), CAST(end_date AS VARCHAR)
+             FROM unavailability"
+        )?;
+
+        let unavailability: Vec<(String, NaiveDate, NaiveDate)> = unavail_stmt
+            .query_map([], |row| {
+                let start_str: String = row.get(1)?;
+                let end_str: String = row.get(2)?;
+                Ok((
+                    row.get(0)?,
+                    NaiveDate::parse_from_str(&start_str, "%Y-%m-%d").unwrap_or(service_date),
+                    NaiveDate::parse_from_str(&end_str, "%Y-%m-%d").unwrap_or(service_date),
+                ))
+            })?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        // Get people already assigned on this date from saved schedules
+        let mut assigned_stmt = conn.prepare(
+            "SELECT DISTINCT a.person_id
+             FROM assignments a
+             INNER JOIN service_dates sd ON a.service_date_id = sd.id
+             WHERE sd.service_date = ?"
+        )?;
+
+        let already_assigned: Vec<String> = assigned_stmt
+            .query_map(duckdb::params![&service_date_str], |row| {
+                row.get(0)
+            })?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        // Get recent assignments for consecutive weeks check
+        let mut recent_stmt = conn.prepare(
+            "SELECT person_id, CAST(service_date AS VARCHAR)
+             FROM assignment_history
+             WHERE service_date >= ? AND service_date < ?"
+        )?;
+
+        let four_weeks_ago = service_date - chrono::Duration::days(28);
+        let recent_assignments: Vec<(String, NaiveDate)> = recent_stmt
+            .query_map(
+                duckdb::params![
+                    four_weeks_ago.format("%Y-%m-%d").to_string(),
+                    service_date_str
+                ],
+                |row| {
+                    let date_str: String = row.get(1)?;
+                    Ok((
+                        row.get(0)?,
+                        NaiveDate::parse_from_str(&date_str, "%Y-%m-%d").unwrap_or(service_date),
+                    ))
+                },
+            )?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        // Get year assignments count
+        let year = service_date.year();
+        let mut year_stmt = conn.prepare(
+            "SELECT person_id, COUNT(*) as count
+             FROM assignment_history
+             WHERE year = ?
+             GROUP BY person_id"
+        )?;
+
+        let year_counts: std::collections::HashMap<String, i32> = year_stmt
+            .query_map([year], |row| Ok((row.get::<_, String>(0)?, row.get::<_, i32>(1)?)))?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        // Get sibling groups
+        let mut sibling_stmt = conn.prepare(
+            "SELECT id, name, pairing_rule FROM sibling_groups"
+        )?;
+
+        let mut sibling_groups: Vec<SiblingGroup> = sibling_stmt
+            .query_map([], |row| {
+                Ok(SiblingGroup {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    pairing_rule: PairingRule::from_str(&row.get::<_, String>(2)?),
+                    created_at: None,
+                    updated_at: None,
+                    member_ids: Vec::new(),
+                })
+            })?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        // Get sibling group members
+        let mut member_stmt = conn.prepare(
+            "SELECT sibling_group_id, person_id FROM sibling_group_members"
+        )?;
+
+        let members: Vec<(String, String)> = member_stmt
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        for group in &mut sibling_groups {
+            group.member_ids = members
+                .iter()
+                .filter(|(gid, _)| gid == &group.id)
+                .map(|(_, pid)| pid.clone())
+                .collect();
+        }
+
+        // Build eligible people list
+        let mut eligible_people: Vec<EligiblePerson> = Vec::new();
+
+        for mut person in people {
+            // Add job_ids to person
+            person.job_ids = job_assignments
+                .iter()
+                .filter(|(pid, _)| pid == &person.id)
+                .map(|(_, jid)| jid.clone())
+                .collect();
+
+            let is_qualified = person.job_ids.contains(&job_id);
+
+            let is_available = !unavailability.iter().any(|(pid, start, end)| {
+                pid == &person.id && service_date >= *start && service_date <= *end
+            });
+
+            let is_already_assigned = already_assigned.contains(&person.id);
+
+            // Check consecutive weeks
+            let passes_consecutive_check =
+                crate::scheduler::constraints::check_consecutive_weeks(
+                    &person,
+                    service_date,
+                    &recent_assignments,
+                );
+
+            // Check sibling constraints
+            let sibling_status =
+                crate::scheduler::constraints::check_sibling_constraint(
+                    &person.id,
+                    &already_assigned,
+                    &sibling_groups,
+                );
+
+            let sibling_status_str = match sibling_status {
+                crate::scheduler::constraints::SiblingConstraintResult::Preferred => "preferred",
+                crate::scheduler::constraints::SiblingConstraintResult::Neutral => "neutral",
+                crate::scheduler::constraints::SiblingConstraintResult::Forbidden => "forbidden",
+            };
+
+            let year_assignments = *year_counts.get(&person.id).unwrap_or(&0);
+
+            // Determine reason if ineligible
+            let reason = if !is_qualified {
+                Some("No está asignado a este trabajo".to_string())
+            } else if !is_available {
+                Some("No disponible en esta fecha".to_string())
+            } else if is_already_assigned && person.id != current_person_id {
+                Some("Ya asignado en esta fecha".to_string())
+            } else if !passes_consecutive_check {
+                Some("Excede semanas consecutivas".to_string())
+            } else if sibling_status_str == "forbidden" {
+                Some("Conflicto con regla de hermanos".to_string())
+            } else {
+                None
+            };
+
+            // Skip current person already assigned status (they are being replaced)
+            let effective_already_assigned = if person.id == current_person_id {
+                false
+            } else {
+                is_already_assigned
+            };
+
+            eligible_people.push(EligiblePerson {
+                id: person.id,
+                first_name: person.first_name,
+                last_name: person.last_name,
+                is_available,
+                is_qualified,
+                passes_consecutive_check,
+                sibling_status: sibling_status_str.to_string(),
+                assignments_this_year: year_assignments,
+                reason_if_ineligible: if !is_qualified
+                    || !is_available
+                    || effective_already_assigned
+                    || !passes_consecutive_check
+                    || sibling_status_str == "forbidden"
+                {
+                    reason
+                } else {
+                    None
+                },
+            });
+        }
+
+        // Sort: eligible first (no reason), then by assignments this year
+        eligible_people.sort_by(|a, b| {
+            let a_eligible = a.reason_if_ineligible.is_none();
+            let b_eligible = b.reason_if_ineligible.is_none();
+
+            match (a_eligible, b_eligible) {
+                (true, false) => std::cmp::Ordering::Less,
+                (false, true) => std::cmp::Ordering::Greater,
+                _ => a.assignments_this_year.cmp(&b.assignments_this_year),
+            }
+        });
+
+        Ok(eligible_people)
+    })
 }

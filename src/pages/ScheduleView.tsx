@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { Plus, Download, Send, Trash2 } from 'lucide-react';
 import { Button, Modal } from '../components/common';
-import { ScheduleCalendar, ScheduleGenerator, ConflictList } from '../components/schedule';
+import { ScheduleCalendar, ScheduleGenerator, ConflictList, EditAssignmentModal } from '../components/schedule';
 import { useScheduleStore } from '../stores/scheduleStore';
 import { useJobsStore } from '../stores/jobsStore';
-import type { GenerateScheduleRequest, Schedule } from '../types';
+import { scheduleApi } from '../services/api';
+import type { GenerateScheduleRequest, Assignment } from '../types';
 
 const statusLabels: Record<string, string> = {
   PUBLISHED: 'PUBLICADO',
@@ -37,6 +38,10 @@ export function ScheduleView() {
   const [showConfirmPublish, setShowConfirmPublish] = useState(false);
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Edit assignment state
+  const [editingAssignment, setEditingAssignment] = useState<Assignment | null>(null);
+  const [editingServiceDate, setEditingServiceDate] = useState<string | null>(null);
 
   useEffect(() => {
     fetchSchedules();
@@ -126,7 +131,54 @@ export function ScheduleView() {
     }
   };
 
+  const handleEditAssignment = (assignment: Assignment, serviceDate: string) => {
+    setEditingAssignment(assignment);
+    setEditingServiceDate(serviceDate);
+  };
+
+  const handleSaveAssignment = async (assignmentId: string, newPersonId: string, newPersonName: string) => {
+    try {
+      if (preview) {
+        // For preview mode, update the state directly (no database call)
+        const updatedServiceDates = preview.schedule.service_dates.map((sd) => ({
+          ...sd,
+          assignments: sd.assignments.map((a) => {
+            if (a.id === assignmentId) {
+              return { ...a, person_id: newPersonId, person_name: newPersonName, manual_override: true };
+            }
+            return a;
+          }),
+        }));
+        setPreview({
+          ...preview,
+          schedule: {
+            ...preview.schedule,
+            service_dates: updatedServiceDates,
+          },
+        });
+        showMessage('success', 'Asignación actualizada');
+      } else if (selectedScheduleId) {
+        // For saved schedules, call the API
+        await scheduleApi.updateAssignment({
+          assignment_id: assignmentId,
+          new_person_id: newPersonId,
+        });
+        await fetchSchedule(selectedScheduleId);
+        showMessage('success', 'Asignación actualizada');
+      }
+    } catch (error) {
+      console.error('Error updating assignment:', error);
+      showMessage('error', `Error al actualizar: ${error}`);
+      throw error;
+    }
+  };
+
   const displaySchedule = preview?.schedule || currentSchedule;
+  const isEditable = preview ? true : (currentSchedule?.status === 'DRAFT');
+  const editingJobName = editingAssignment?.job_name || jobs.find((j) => j.id === editingAssignment?.job_id)?.name || '';
+
+  // Gather all assignments from the current schedule for eligibility checking
+  const allCurrentAssignments = displaySchedule?.service_dates.flatMap((sd) => sd.assignments) || [];
 
   return (
     <div className="space-y-6">
@@ -203,7 +255,7 @@ export function ScheduleView() {
                 <div>
                   <h3 className="font-medium text-yellow-800">Modo Vista Previa</h3>
                   <p className="text-sm text-yellow-700 mt-1">
-                    Revise el horario generado antes de guardar
+                    Revise el horario generado antes de guardar. Puede editar las asignaciones haciendo clic en el icono de lápiz.
                   </p>
                 </div>
                 <div className="flex space-x-2">
@@ -237,6 +289,11 @@ export function ScheduleView() {
                     </h2>
                     <p className="text-sm text-gray-500 mt-1">
                       {displaySchedule.service_dates.length} fechas de servicio
+                      {isEditable && (
+                        <span className="ml-2 text-primary-600">
+                          (Haga clic en el lápiz para editar asignaciones)
+                        </span>
+                      )}
                     </p>
                   </div>
                   {!preview && currentSchedule && (
@@ -259,7 +316,12 @@ export function ScheduleView() {
                 </div>
               </div>
 
-              <ScheduleCalendar schedule={displaySchedule} jobs={jobs} />
+              <ScheduleCalendar
+                schedule={displaySchedule}
+                jobs={jobs}
+                editable={isEditable}
+                onEditAssignment={handleEditAssignment}
+              />
             </>
           ) : (
             <div className="bg-white rounded-lg shadow p-12 text-center">
@@ -280,6 +342,20 @@ export function ScheduleView() {
       >
         <ScheduleGenerator onGenerate={handleGenerate} isLoading={isGenerating} />
       </Modal>
+
+      {/* Edit Assignment Modal */}
+      <EditAssignmentModal
+        isOpen={!!editingAssignment}
+        onClose={() => {
+          setEditingAssignment(null);
+          setEditingServiceDate(null);
+        }}
+        assignment={editingAssignment}
+        serviceDate={editingServiceDate}
+        jobName={editingJobName}
+        currentScheduleAssignments={allCurrentAssignments}
+        onSave={handleSaveAssignment}
+      />
 
       {/* Confirm Publish Modal */}
       <Modal

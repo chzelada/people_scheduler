@@ -151,6 +151,11 @@ export interface FairnessScore {
   fairness_score: number;
 }
 
+export interface PersonAssignmentDetail {
+  service_date: string;
+  job_name: string;
+}
+
 // Sibling group types
 export type PairingRule = 'TOGETHER' | 'SEPARATE';
 
@@ -202,4 +207,23 @@ export interface UpdateUnavailabilityRequest {
   end_date?: string;
   reason?: string;
   recurring?: boolean;
+}
+
+// Eligible person for assignment editing
+export interface EligiblePerson {
+  id: string;
+  first_name: string;
+  last_name: string;
+  is_available: boolean;
+  is_qualified: boolean;
+  passes_consecutive_check: boolean;
+  sibling_status: 'preferred' | 'neutral' | 'forbidden';
+  assignments_this_year: number;
+  reason_if_ineligible?: string;
+}
+
+export interface GetEligiblePeopleRequest {
+  job_id: string;
+  service_date: string;
+  current_person_id?: string;
 }

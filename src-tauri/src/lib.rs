@@ -5,7 +5,6 @@ mod models;
 mod scheduler;
 
 use commands::*;
-use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -40,6 +39,8 @@ pub fn run() {
             delete_schedule,
             get_fairness_scores,
             get_schedule_by_month,
+            get_person_assignment_history,
+            get_eligible_people_for_assignment,
             // Sibling group commands
             get_all_sibling_groups,
             get_sibling_group,

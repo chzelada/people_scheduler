@@ -18,6 +18,9 @@ import type {
   CreateUnavailabilityRequest,
   UpdateUnavailabilityRequest,
   FairnessScore,
+  PersonAssignmentDetail,
+  EligiblePerson,
+  GetEligiblePeopleRequest,
 } from '../types';
 
 // People API
@@ -50,6 +53,10 @@ export const scheduleApi = {
   publish: (id: string) => invoke<Schedule>('publish_schedule', { id }),
   delete: (id: string) => invoke<void>('delete_schedule', { id }),
   getFairnessScores: (year: number) => invoke<FairnessScore[]>('get_fairness_scores', { year }),
+  getPersonAssignmentHistory: (personId: string, startDate: string, endDate: string) =>
+    invoke<PersonAssignmentDetail[]>('get_person_assignment_history', { personId, startDate, endDate }),
+  getEligiblePeopleForAssignment: (request: GetEligiblePeopleRequest) =>
+    invoke<EligiblePerson[]>('get_eligible_people_for_assignment', { request }),
 };
 
 // Sibling Groups API
