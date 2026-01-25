@@ -106,6 +106,7 @@ export interface Assignment {
   updated_at?: string;
   person_name?: string;
   job_name?: string;
+  position_name?: string;
 }
 
 export interface GenerateScheduleRequest {
@@ -154,6 +155,8 @@ export interface FairnessScore {
 export interface PersonAssignmentDetail {
   service_date: string;
   job_name: string;
+  position?: number;
+  position_name?: string;
 }
 
 // Sibling group types

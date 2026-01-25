@@ -91,10 +91,12 @@ pub fn get_schedule(id: String) -> Result<Schedule, String> {
                 "SELECT a.id, a.service_date_id, a.job_id, a.person_id, a.position,
                         a.manual_override,
                         p.first_name || ' ' || p.last_name as person_name,
-                        j.name as job_name
+                        j.name as job_name,
+                        COALESCE(a.position_name, jp.name) as position_name
                  FROM assignments a
                  INNER JOIN people p ON a.person_id = p.id
                  INNER JOIN jobs j ON a.job_id = j.id
+                 LEFT JOIN job_positions jp ON a.job_id = jp.job_id AND a.position = jp.position_number
                  WHERE a.service_date_id = ?
                  ORDER BY j.name, a.position"
             )?;
@@ -112,6 +114,7 @@ pub fn get_schedule(id: String) -> Result<Schedule, String> {
                         updated_at: None,
                         person_name: row.get(6).ok(),
                         job_name: row.get(7).ok(),
+                        position_name: row.get(8).ok(),
                     })
                 })?
                 .filter_map(|r| r.ok())
@@ -199,31 +202,33 @@ pub fn save_schedule(preview: SchedulePreview) -> Result<Schedule, String> {
 
             for assignment in &sd.assignments {
                 conn.execute(
-                    "INSERT INTO assignments (id, service_date_id, job_id, person_id, position, manual_override)
-                     VALUES (?, ?, ?, ?, ?, ?)",
+                    "INSERT INTO assignments (id, service_date_id, job_id, person_id, position, manual_override, position_name)
+                     VALUES (?, ?, ?, ?, ?, ?, ?)",
                     duckdb::params![
                         &assignment.id,
                         &sd.id,
                         &assignment.job_id,
                         &assignment.person_id,
                         assignment.position,
-                        assignment.manual_override
+                        assignment.manual_override,
+                        &assignment.position_name
                     ],
                 )?;
 
-                // Add to assignment history
+                // Add to assignment history with position for rotation tracking
                 let history_id = Uuid::new_v4().to_string();
                 let week = sd.service_date.iso_week().week();
                 conn.execute(
-                    "INSERT INTO assignment_history (id, person_id, job_id, service_date, year, week_number)
-                     VALUES (?, ?, ?, ?, ?, ?)",
+                    "INSERT INTO assignment_history (id, person_id, job_id, service_date, year, week_number, position)
+                     VALUES (?, ?, ?, ?, ?, ?, ?)",
                     duckdb::params![
                         &history_id,
                         &assignment.person_id,
                         &assignment.job_id,
                         &service_date_str,
                         schedule.year,
-                        week as i32
+                        week as i32,
+                        assignment.position
                     ],
                 )?;
             }
@@ -248,10 +253,12 @@ pub fn update_assignment(request: UpdateAssignmentRequest) -> Result<Assignment,
             "SELECT a.id, a.service_date_id, a.job_id, a.person_id, a.position,
                     a.manual_override,
                     p.first_name || ' ' || p.last_name as person_name,
-                    j.name as job_name
+                    j.name as job_name,
+                    COALESCE(a.position_name, jp.name) as position_name
              FROM assignments a
              INNER JOIN people p ON a.person_id = p.id
              INNER JOIN jobs j ON a.job_id = j.id
+             LEFT JOIN job_positions jp ON a.job_id = jp.job_id AND a.position = jp.position_number
              WHERE a.id = ?"
         )?;
 
@@ -267,6 +274,7 @@ pub fn update_assignment(request: UpdateAssignmentRequest) -> Result<Assignment,
                 updated_at: None,
                 person_name: row.get(6).ok(),
                 job_name: row.get(7).ok(),
+                position_name: row.get(8).ok(),
             })
         })?;
 
@@ -431,6 +439,8 @@ pub fn get_schedule_by_month(year: i32, month: i32) -> Result<Option<Schedule>, 
 pub struct PersonAssignmentDetail {
     pub service_date: String,
     pub job_name: String,
+    pub position: Option<i32>,
+    pub position_name: Option<String>,
 }
 
 #[tauri::command]
@@ -441,9 +451,10 @@ pub fn get_person_assignment_history(
 ) -> Result<Vec<PersonAssignmentDetail>, String> {
     with_db(|conn| {
         let mut stmt = conn.prepare(
-            "SELECT CAST(ah.service_date AS VARCHAR), j.name
+            "SELECT CAST(ah.service_date AS VARCHAR), j.name, ah.position, jp.name as position_name
              FROM assignment_history ah
              INNER JOIN jobs j ON ah.job_id = j.id
+             LEFT JOIN job_positions jp ON ah.job_id = jp.job_id AND ah.position = jp.position_number
              WHERE ah.person_id = ?
                AND ah.service_date >= ?
                AND ah.service_date <= ?
@@ -455,6 +466,8 @@ pub fn get_person_assignment_history(
                 Ok(PersonAssignmentDetail {
                     service_date: row.get(0)?,
                     job_name: row.get(1)?,
+                    position: row.get(2).ok(),
+                    position_name: row.get(3).ok(),
                 })
             })?
             .filter_map(|r| r.ok())

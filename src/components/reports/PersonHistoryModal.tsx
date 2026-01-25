@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { format, startOfMonth, endOfMonth, eachWeekOfInterval } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { Eye, BookOpen, Music, Book } from 'lucide-react';
 import { Modal } from '../common';
 import { scheduleApi } from '../../services/api';
 import type { PersonAssignmentDetail } from '../../types';
@@ -40,7 +41,7 @@ export function PersonHistoryModal({ isOpen, onClose, personId, personName }: Pe
   const [endYear, setEndYear] = useState(currentYear);
   const [assignments, setAssignments] = useState<PersonAssignmentDetail[]>([]);
   const [loading, setLoading] = useState(false);
-  const [hoveredDate, setHoveredDate] = useState<{ date: Date; jobs: string[] } | null>(null);
+  const [hoveredDate, setHoveredDate] = useState<{ date: Date; assignments: { job_name: string; position?: number; position_name?: string }[] } | null>(null);
 
   const years = Array.from({ length: 5 }, (_, i) => currentYear - 2 + i);
 
@@ -97,22 +98,31 @@ export function PersonHistoryModal({ isOpen, onClose, personId, personName }: Pe
   const sundaysByMonth = getSundaysByMonth();
   const totalSundays = sundaysByMonth.reduce((acc, m) => acc + m.sundays.length, 0);
 
-  // Create a map of date -> jobs served
-  const assignmentMap = new Map<string, string[]>();
+  // Create a map of date -> assignment details
+  interface AssignmentInfo {
+    job_name: string;
+    position?: number;
+    position_name?: string;
+  }
+  const assignmentMap = new Map<string, AssignmentInfo[]>();
   for (const assignment of assignments) {
     const dateKey = assignment.service_date;
     if (!assignmentMap.has(dateKey)) {
       assignmentMap.set(dateKey, []);
     }
-    assignmentMap.get(dateKey)!.push(assignment.job_name);
+    assignmentMap.get(dateKey)!.push({
+      job_name: assignment.job_name,
+      position: assignment.position,
+      position_name: assignment.position_name,
+    });
   }
 
   const getSquareStyle = (sunday: Date) => {
     const dateKey = format(sunday, 'yyyy-MM-dd');
-    const jobs = assignmentMap.get(dateKey) || [];
+    const infos = assignmentMap.get(dateKey) || [];
 
-    const hasMonaguillo = jobs.some(j => j.toLowerCase() === 'monaguillos');
-    const hasLector = jobs.some(j => j.toLowerCase() === 'lectores');
+    const hasMonaguillo = infos.some(j => j.job_name.toLowerCase() === 'monaguillos');
+    const hasLector = infos.some(j => j.job_name.toLowerCase() === 'lectores');
 
     if (hasMonaguillo && hasLector) {
       return {
@@ -127,9 +137,50 @@ export function PersonHistoryModal({ isOpen, onClose, personId, personName }: Pe
     }
   };
 
-  const getJobs = (sunday: Date): string[] => {
+  const getAssignments = (sunday: Date): AssignmentInfo[] => {
     const dateKey = format(sunday, 'yyyy-MM-dd');
     return assignmentMap.get(dateKey) || [];
+  };
+
+  // Get icon for lector position
+  const getLectorIcon = (position?: number) => {
+    switch (position) {
+      case 1: return <Eye className="w-3.5 h-3.5" />; // Monitor
+      case 2: return <Book className="w-3.5 h-3.5" />; // Primera Lectura
+      case 3: return <Music className="w-3.5 h-3.5" />; // Salmo
+      case 4: return <BookOpen className="w-3.5 h-3.5" />; // Segunda Lectura
+      default: return null;
+    }
+  };
+
+  // Render content inside the square
+  const renderSquareContent = (sunday: Date) => {
+    const infos = getAssignments(sunday);
+    if (infos.length === 0) return null;
+
+    const monaguillo = infos.find(j => j.job_name.toLowerCase() === 'monaguillos');
+    const lector = infos.find(j => j.job_name.toLowerCase() === 'lectores');
+
+    if (monaguillo && lector) {
+      // Both - show split with number and icon
+      return (
+        <div className="flex items-center justify-center w-full h-full">
+          <span className="text-white text-xs font-bold">{monaguillo.position || ''}</span>
+          <span className="text-white ml-0.5">{getLectorIcon(lector.position)}</span>
+        </div>
+      );
+    } else if (monaguillo) {
+      // Show number for monaguillo
+      return (
+        <span className="text-white text-sm font-bold">{monaguillo.position || ''}</span>
+      );
+    } else if (lector) {
+      // Show icon for lector
+      return (
+        <span className="text-white">{getLectorIcon(lector.position)}</span>
+      );
+    }
+    return null;
   };
 
   // Count statistics
@@ -194,22 +245,44 @@ export function PersonHistoryModal({ isOpen, onClose, personId, personName }: Pe
         </div>
 
         {/* Legend */}
-        <div className="flex items-center space-x-4 text-sm">
-          <div className="flex items-center space-x-1">
-            <div className="w-4 h-4 rounded" style={{ backgroundColor: '#3B82F6' }} />
-            <span>Monaguillo</span>
+        <div className="space-y-2">
+          <div className="flex items-center flex-wrap gap-3 text-sm">
+            <div className="flex items-center space-x-1">
+              <div className="w-5 h-5 rounded flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: '#3B82F6' }}>1</div>
+              <span>Monaguillo (1-4)</span>
+            </div>
+            <div className="flex items-center space-x-1">
+              <div className="w-5 h-5 rounded flex items-center justify-center text-white" style={{ backgroundColor: '#10B981' }}><Eye className="w-3 h-3" /></div>
+              <span>Lector</span>
+            </div>
+            <div className="flex items-center space-x-1">
+              <div className="w-5 h-5 rounded flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #3B82F6 50%, #10B981 50%)' }} />
+              <span>Ambos</span>
+            </div>
+            <div className="flex items-center space-x-1">
+              <div className="w-5 h-5 rounded border border-gray-300 bg-gray-100" />
+              <span>No sirvió</span>
+            </div>
           </div>
-          <div className="flex items-center space-x-1">
-            <div className="w-4 h-4 rounded" style={{ backgroundColor: '#10B981' }} />
-            <span>Lector</span>
-          </div>
-          <div className="flex items-center space-x-1">
-            <div className="w-4 h-4 rounded" style={{ background: 'linear-gradient(135deg, #3B82F6 50%, #10B981 50%)' }} />
-            <span>Ambos</span>
-          </div>
-          <div className="flex items-center space-x-1">
-            <div className="w-4 h-4 rounded border border-gray-300 bg-gray-100" />
-            <span>No sirvió</span>
+          {/* Lector icons legend */}
+          <div className="flex items-center flex-wrap gap-3 text-xs text-gray-600">
+            <span className="font-medium">Lectores:</span>
+            <div className="flex items-center space-x-1">
+              <Eye className="w-3.5 h-3.5 text-green-600" />
+              <span>Monitor</span>
+            </div>
+            <div className="flex items-center space-x-1">
+              <Book className="w-3.5 h-3.5 text-green-600" />
+              <span>1ra Lectura</span>
+            </div>
+            <div className="flex items-center space-x-1">
+              <Music className="w-3.5 h-3.5 text-green-600" />
+              <span>Salmo</span>
+            </div>
+            <div className="flex items-center space-x-1">
+              <BookOpen className="w-3.5 h-3.5 text-green-600" />
+              <span>2da Lectura</span>
+            </div>
           </div>
         </div>
 
@@ -234,13 +307,15 @@ export function PersonHistoryModal({ isOpen, onClose, personId, personName }: Pe
         </div>
 
         {/* Instant Tooltip */}
-        <div className="h-6 text-sm text-center">
+        <div className="min-h-6 text-sm text-center">
           {hoveredDate ? (
             <span>
               <span className="font-medium">{format(hoveredDate.date, "d 'de' MMMM yyyy", { locale: es })}</span>
               {' - '}
-              <span className={hoveredDate.jobs.length > 0 ? 'text-primary-600' : 'text-gray-500'}>
-                {hoveredDate.jobs.length > 0 ? hoveredDate.jobs.join(', ') : 'No sirvió'}
+              <span className={hoveredDate.assignments.length > 0 ? 'text-primary-600' : 'text-gray-500'}>
+                {hoveredDate.assignments.length > 0
+                  ? hoveredDate.assignments.map(a => a.position_name || a.job_name).join(', ')
+                  : 'No sirvió'}
               </span>
             </span>
           ) : (
@@ -264,11 +339,13 @@ export function PersonHistoryModal({ isOpen, onClose, personId, personName }: Pe
                     {monthGroup.sundays.map((sunday) => (
                       <div
                         key={sunday.toISOString()}
-                        className="w-7 h-7 rounded cursor-pointer transition-transform hover:scale-110"
+                        className="w-7 h-7 rounded cursor-pointer transition-transform hover:scale-110 flex items-center justify-center"
                         style={getSquareStyle(sunday)}
-                        onMouseEnter={() => setHoveredDate({ date: sunday, jobs: getJobs(sunday) })}
+                        onMouseEnter={() => setHoveredDate({ date: sunday, assignments: getAssignments(sunday) })}
                         onMouseLeave={() => setHoveredDate(null)}
-                      />
+                      >
+                        {renderSquareContent(sunday)}
+                      </div>
                     ))}
                   </div>
                 </div>

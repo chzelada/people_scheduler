@@ -58,6 +58,9 @@ pub fn run() {
             check_availability,
             // Export commands
             export_schedule_to_path,
+            // Test data commands
+            import_test_data,
+            generate_year_schedules,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

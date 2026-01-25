@@ -11,6 +11,16 @@ pub struct Job {
     pub active: bool,
     pub created_at: Option<DateTime<Utc>>,
     pub updated_at: Option<DateTime<Utc>>,
+    #[serde(default)]
+    pub positions: Vec<JobPosition>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct JobPosition {
+    pub id: String,
+    pub job_id: String,
+    pub position_number: i32,
+    pub name: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

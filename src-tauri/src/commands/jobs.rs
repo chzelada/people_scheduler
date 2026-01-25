@@ -22,6 +22,7 @@ pub fn get_all_jobs() -> Result<Vec<Job>, String> {
                     active: row.get(5)?,
                     created_at: None,
                     updated_at: None,
+                    positions: Vec::new(),
                 })
             })?
             .filter_map(|r| r.ok())
@@ -49,6 +50,7 @@ pub fn get_job(id: String) -> Result<Job, String> {
                 active: row.get(5)?,
                 created_at: None,
                 updated_at: None,
+                positions: Vec::new(),
             })
         })?;
 

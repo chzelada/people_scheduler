@@ -124,6 +124,9 @@ export function EditAssignmentModal({
           </div>
           <div className="text-sm text-gray-600 mt-1">
             <span className="font-medium">Trabajo:</span> {jobName}
+            {assignment?.position_name && (
+              <span className="ml-2 text-gray-500">({assignment.position_name})</span>
+            )}
           </div>
           <div className="text-sm text-gray-600 mt-1">
             <span className="font-medium">Persona actual:</span>{' '}

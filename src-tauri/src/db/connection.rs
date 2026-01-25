@@ -44,19 +44,24 @@ fn run_migrations(conn: &Connection) -> DuckResult<()> {
         );"
     )?;
 
-    // Read and execute migration files
-    let migration_sql = include_str!("../../../migrations/001_initial_schema.sql");
+    // Define migrations
+    let migrations = [
+        ("001_initial_schema", include_str!("../../../migrations/001_initial_schema.sql")),
+        ("002_job_positions", include_str!("../../../migrations/002_job_positions.sql")),
+    ];
 
-    // Check if migration was already applied
-    let mut stmt = conn.prepare("SELECT COUNT(*) FROM _migrations WHERE name = ?")?;
-    let count: i64 = stmt.query_row(["001_initial_schema"], |row| row.get(0))?;
+    for (name, sql) in migrations {
+        // Check if migration was already applied
+        let mut stmt = conn.prepare("SELECT COUNT(*) FROM _migrations WHERE name = ?")?;
+        let count: i64 = stmt.query_row([name], |row| row.get(0))?;
 
-    if count == 0 {
-        conn.execute_batch(migration_sql)?;
-        conn.execute(
-            "INSERT INTO _migrations (name) VALUES (?)",
-            ["001_initial_schema"],
-        )?;
+        if count == 0 {
+            conn.execute_batch(sql)?;
+            conn.execute(
+                "INSERT INTO _migrations (name) VALUES (?)",
+                [name],
+            )?;
+        }
     }
 
     Ok(())

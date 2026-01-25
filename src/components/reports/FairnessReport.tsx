@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { Search, X } from 'lucide-react';
 import type { FairnessScore } from '../../types';
 import { PersonHistoryModal } from './PersonHistoryModal';
 
@@ -10,8 +11,16 @@ interface FairnessReportProps {
 }
 
 export function FairnessReport({ scores, year }: FairnessReportProps) {
-  const maxAssignments = Math.max(...scores.map((s) => s.assignments_this_year), 1);
   const [selectedPerson, setSelectedPerson] = useState<{ id: string; name: string } | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const filteredScores = useMemo(() => {
+    if (!searchTerm.trim()) return scores;
+    const term = searchTerm.toLowerCase().trim();
+    return scores.filter((s) => s.person_name.toLowerCase().includes(term));
+  }, [scores, searchTerm]);
+
+  const maxAssignments = Math.max(...scores.map((s) => s.assignments_this_year), 1);
 
   const getJobCount = (score: FairnessScore, jobName: string): number => {
     const job = score.assignments_by_job?.find(
@@ -27,8 +36,30 @@ export function FairnessReport({ scores, year }: FairnessReportProps) {
           Distribución de Asignaciones - {year}
         </h3>
         <div className="text-sm text-gray-500">
-          {scores.length} voluntarios
+          {filteredScores.length} de {scores.length} voluntarios
         </div>
+      </div>
+
+      {/* Search Bar */}
+      <div className="relative">
+        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+          <Search className="h-5 w-5 text-gray-400" />
+        </div>
+        <input
+          type="text"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          placeholder="Buscar voluntario por nombre..."
+          className="block w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500 text-sm"
+        />
+        {searchTerm && (
+          <button
+            onClick={() => setSearchTerm('')}
+            className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        )}
       </div>
 
       {/* Header */}
@@ -42,7 +73,7 @@ export function FairnessReport({ scores, year }: FairnessReportProps) {
       </div>
 
       <div className="space-y-2">
-        {scores.map((score) => {
+        {filteredScores.map((score) => {
           const percentage = (score.assignments_this_year / maxAssignments) * 100;
           const monaguilloCount = getJobCount(score, 'Monaguillos');
           const lectorCount = getJobCount(score, 'Lectores');
@@ -90,9 +121,9 @@ export function FairnessReport({ scores, year }: FairnessReportProps) {
         })}
       </div>
 
-      {scores.length === 0 && (
+      {filteredScores.length === 0 && (
         <div className="text-center py-8 text-gray-500">
-          No hay datos de asignaciones para {year}
+          {searchTerm ? `No se encontraron resultados para "${searchTerm}"` : `No hay datos de asignaciones para ${year}`}
         </div>
       )}
 

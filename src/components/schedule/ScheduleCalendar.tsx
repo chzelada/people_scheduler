@@ -61,9 +61,16 @@ export function ScheduleCalendar({ schedule, jobs, editable = false, onEditAssig
                               className="px-3 py-2 flex items-center justify-between group"
                             >
                               <div className="flex items-center space-x-2">
-                                <span className="text-sm text-gray-900">
-                                  {assignment.person_name || assignment.person_id}
-                                </span>
+                                <div className="flex flex-col">
+                                  {assignment.position_name && (
+                                    <span className="text-xs font-medium text-gray-500">
+                                      {assignment.position_name}
+                                    </span>
+                                  )}
+                                  <span className="text-sm text-gray-900">
+                                    {assignment.person_name || assignment.person_id}
+                                  </span>
+                                </div>
                                 {assignment.manual_override && (
                                   <span className="text-xs text-orange-500">(manual)</span>
                                 )}

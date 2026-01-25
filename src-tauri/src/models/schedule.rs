@@ -67,6 +67,8 @@ pub struct Assignment {
     pub person_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub job_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub position_name: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
