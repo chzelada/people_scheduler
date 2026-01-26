@@ -190,17 +190,11 @@ pub async fn generate(
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    tracing::info!("Found {} active jobs", jobs.len());
-    for job in &jobs {
-        tracing::info!("Job: {} (id={}, people_required={})", job.name, job.id, job.people_required);
-    }
-
     // Generate assignments using the algorithm
     let mut dates_with_assignments = Vec::new();
 
     for sd in service_dates {
         let mut assignments = Vec::new();
-        tracing::info!("Processing service date: {}", sd.service_date);
 
         for job in &jobs {
             let job_assignments = generate_job_assignments(
@@ -210,7 +204,6 @@ pub async fn generate(
                 year,
             ).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
 
-            tracing::info!("  Job {}: {} assignments generated", job.name, job_assignments.len());
             assignments.extend(job_assignments);
         }
 
@@ -297,10 +290,7 @@ async fn generate_job_assignments(
     .await
     .map_err(|e| e.to_string())?;
 
-    tracing::info!("    Found {} candidates for job {}", candidates.len(), job.name);
-
     if candidates.is_empty() {
-        tracing::warn!("    No candidates available for {} on {}", job.name, service_date.service_date);
         return Ok(Vec::new());
     }
 
