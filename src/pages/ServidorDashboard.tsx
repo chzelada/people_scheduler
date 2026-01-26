@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { format, parseISO, isSameMonth, startOfMonth, addMonths, subMonths, eachDayOfInterval, startOfWeek, endOfWeek, endOfMonth, isToday, isSameDay } from 'date-fns';
+import { format, parseISO, isSameMonth, startOfMonth, addMonths, subMonths, eachDayOfInterval, startOfWeek, endOfWeek, endOfMonth, isToday, isSameDay, isSunday } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Calendar, ChevronLeft, ChevronRight, Star, LogOut, Key } from 'lucide-react';
-import { scheduleApi, MyAssignment } from '../services/api';
+import { Calendar, ChevronLeft, ChevronRight, Star, LogOut, Key, XCircle, CalendarX, Trash2 } from 'lucide-react';
+import { scheduleApi, myUnavailabilityApi, MyAssignment } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
 import { Button, Modal, Input } from '../components/common';
+import type { Unavailability } from '../types';
 
 export function ServidorDashboard() {
   const { user, logout, changePassword } = useAuthStore();
@@ -16,9 +17,17 @@ export function ServidorDashboard() {
   const [passwordError, setPasswordError] = useState('');
   const [isChangingPassword, setIsChangingPassword] = useState(false);
 
+  // Unavailability state
+  const [unavailabilities, setUnavailabilities] = useState<Unavailability[]>([]);
+  const [isUnavailabilityModalOpen, setIsUnavailabilityModalOpen] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [unavailabilityReason, setUnavailabilityReason] = useState('');
+  const [isSavingUnavailability, setIsSavingUnavailability] = useState(false);
+
   useEffect(() => {
     if (user?.person_id) {
       fetchAssignments();
+      fetchUnavailabilities();
     }
   }, [user?.person_id]);
 
@@ -33,6 +42,69 @@ export function ServidorDashboard() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const fetchUnavailabilities = async () => {
+    try {
+      const data = await myUnavailabilityApi.getAll();
+      setUnavailabilities(data);
+    } catch (error) {
+      console.error('Error fetching unavailabilities:', error);
+    }
+  };
+
+  const handleSundayClick = (date: Date) => {
+    // Only allow clicking on future Sundays
+    const todayDate = new Date();
+    todayDate.setHours(0, 0, 0, 0);
+    if (!isSunday(date) || date < todayDate) return;
+
+    // Check if already unavailable
+    const existing = unavailabilities.find(u => isSameDay(parseISO(u.start_date), date));
+    if (existing) {
+      // Ask to delete
+      if (window.confirm(`¿Deseas eliminar tu ausencia del ${format(date, "d 'de' MMMM", { locale: es })}?`)) {
+        handleDeleteUnavailability(existing.id);
+      }
+    } else {
+      // Open modal to add
+      setSelectedDate(date);
+      setUnavailabilityReason('');
+      setIsUnavailabilityModalOpen(true);
+    }
+  };
+
+  const handleSaveUnavailability = async () => {
+    if (!selectedDate) return;
+
+    setIsSavingUnavailability(true);
+    try {
+      const dateStr = format(selectedDate, 'yyyy-MM-dd');
+      await myUnavailabilityApi.create([dateStr], unavailabilityReason || undefined);
+      await fetchUnavailabilities();
+      setIsUnavailabilityModalOpen(false);
+      setSelectedDate(null);
+      setUnavailabilityReason('');
+    } catch (error) {
+      console.error('Error saving unavailability:', error);
+      alert('Error al guardar ausencia: ' + String(error));
+    } finally {
+      setIsSavingUnavailability(false);
+    }
+  };
+
+  const handleDeleteUnavailability = async (id: string) => {
+    try {
+      await myUnavailabilityApi.delete(id);
+      await fetchUnavailabilities();
+    } catch (error) {
+      console.error('Error deleting unavailability:', error);
+      alert('Error al eliminar ausencia: ' + String(error));
+    }
+  };
+
+  const getUnavailabilityForDate = (date: Date) => {
+    return unavailabilities.find(u => isSameDay(parseISO(u.start_date), date));
   };
 
   // Separate upcoming and past assignments
@@ -294,27 +366,42 @@ export function ServidorDashboard() {
             <div className="grid grid-cols-7 gap-1">
               {calendarDays.map((day, index) => {
                 const assignment = getAssignmentForDate(day);
+                const unavailability = getUnavailabilityForDate(day);
                 const isCurrentMonth = isSameMonth(day, currentMonth);
                 const isTodayDate = isToday(day);
+                const isSundayDay = isSunday(day);
+                const isFutureSunday = isSundayDay && day >= today;
 
                 return (
                   <div
                     key={index}
+                    onClick={() => isFutureSunday && isCurrentMonth && handleSundayClick(day)}
                     className={`relative aspect-square p-1 rounded-lg transition-colors ${
                       !isCurrentMonth ? 'opacity-30' : ''
-                    } ${isTodayDate ? 'ring-2 ring-blue-500 ring-offset-1' : ''}`}
+                    } ${isTodayDate ? 'ring-2 ring-blue-500 ring-offset-1' : ''} ${
+                      isFutureSunday && isCurrentMonth ? 'cursor-pointer hover:bg-blue-50' : ''
+                    } ${unavailability ? 'bg-red-50' : ''}`}
                   >
                     <div className={`text-center text-sm ${
-                      isTodayDate ? 'font-bold text-blue-600' : 'text-gray-700'
+                      isTodayDate ? 'font-bold text-blue-600' : unavailability ? 'text-red-600' : 'text-gray-700'
                     }`}>
                       {format(day, 'd')}
                     </div>
-                    {assignment && (
+                    {unavailability && (
+                      <div
+                        className="absolute bottom-1 left-1 right-1 h-1.5 rounded-full bg-red-400"
+                        title={`No disponible: ${unavailability.reason || 'Sin motivo'}`}
+                      />
+                    )}
+                    {assignment && !unavailability && (
                       <div
                         className="absolute bottom-1 left-1 right-1 h-1.5 rounded-full"
                         style={{ backgroundColor: assignment.job_color }}
                         title={assignment.job_name}
                       />
+                    )}
+                    {isFutureSunday && isCurrentMonth && !unavailability && !assignment && (
+                      <div className="absolute bottom-1 left-1 right-1 h-1.5 rounded-full bg-gray-200" />
                     )}
                   </div>
                 );
@@ -337,9 +424,64 @@ export function ServidorDashboard() {
                   </div>
                 );
               })}
+              <div className="flex items-center">
+                <span className="w-3 h-3 rounded-full mr-2 bg-red-400" />
+                <span className="text-gray-600">No disponible</span>
+              </div>
             </div>
+            <p className="text-xs text-gray-400 mt-2">
+              Haz clic en un domingo futuro para marcar tu ausencia
+            </p>
           </div>
         </div>
+
+        {/* My Unavailabilities */}
+        {unavailabilities.filter(u => parseISO(u.start_date) >= today).length > 0 && (
+          <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center">
+              <CalendarX className="w-5 h-5 text-red-500 mr-2" />
+              <h3 className="text-lg font-semibold text-gray-900">Mis Ausencias Programadas</h3>
+            </div>
+            <ul className="divide-y divide-gray-100">
+              {unavailabilities
+                .filter(u => parseISO(u.start_date) >= today)
+                .sort((a, b) => new Date(a.start_date).getTime() - new Date(b.start_date).getTime())
+                .map((unavail) => (
+                  <li key={unavail.id} className="px-6 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors">
+                    <div className="flex items-center space-x-4">
+                      <div className="w-12 h-12 rounded-xl flex flex-col items-center justify-center bg-red-50">
+                        <span className="text-xs text-red-500 uppercase">
+                          {format(parseISO(unavail.start_date), 'MMM', { locale: es })}
+                        </span>
+                        <span className="text-lg font-bold text-red-600">
+                          {format(parseISO(unavail.start_date), 'd')}
+                        </span>
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-900">
+                          {format(parseISO(unavail.start_date), 'EEEE', { locale: es })}
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          {unavail.reason || 'Sin motivo especificado'}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        if (window.confirm('¿Eliminar esta ausencia?')) {
+                          handleDeleteUnavailability(unavail.id);
+                        }
+                      }}
+                      className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      title="Eliminar ausencia"
+                    >
+                      <Trash2 className="w-5 h-5" />
+                    </button>
+                  </li>
+                ))}
+            </ul>
+          </div>
+        )}
       </main>
 
       {/* Password Change Modal */}
@@ -388,6 +530,50 @@ export function ServidorDashboard() {
             </Button>
           </div>
         </form>
+      </Modal>
+
+      {/* Unavailability Modal */}
+      <Modal
+        isOpen={isUnavailabilityModalOpen}
+        onClose={() => { setIsUnavailabilityModalOpen(false); setSelectedDate(null); setUnavailabilityReason(''); }}
+        title="Marcar Ausencia"
+      >
+        <div className="space-y-4">
+          <div className="bg-red-50 rounded-lg p-4 text-center">
+            <CalendarX className="w-8 h-8 text-red-500 mx-auto mb-2" />
+            <p className="text-lg font-semibold text-gray-900">
+              {selectedDate && format(selectedDate, "EEEE d 'de' MMMM, yyyy", { locale: es })}
+            </p>
+            <p className="text-sm text-gray-500 mt-1">
+              No estarás disponible para servir este domingo
+            </p>
+          </div>
+
+          <Input
+            label="Motivo (opcional)"
+            placeholder="Ej: Viaje, Compromiso familiar..."
+            value={unavailabilityReason}
+            onChange={(e) => setUnavailabilityReason(e.target.value)}
+          />
+
+          <div className="flex justify-end space-x-3 pt-4">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => { setIsUnavailabilityModalOpen(false); setSelectedDate(null); setUnavailabilityReason(''); }}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleSaveUnavailability}
+              isLoading={isSavingUnavailability}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              <XCircle className="w-4 h-4 mr-2" />
+              Marcar como No Disponible
+            </Button>
+          </div>
+        </div>
       </Modal>
     </div>
   );

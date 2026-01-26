@@ -216,6 +216,14 @@ export const unavailabilityApi = {
   },
 };
 
+// My Unavailability API (for servidores self-service)
+export const myUnavailabilityApi = {
+  getAll: () => get<Unavailability[]>('/my-unavailability'),
+  create: (dates: string[], reason?: string) =>
+    post<Unavailability[]>('/my-unavailability', { dates, reason }),
+  delete: (id: string) => del<void>(`/my-unavailability/${id}`),
+};
+
 // Export API - not available in web version
 export const exportApi = {
   exportSchedule: async (_scheduleId: string) => {

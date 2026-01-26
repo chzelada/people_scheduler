@@ -1,6 +1,9 @@
 #!/bin/bash
 set -e
 
+# Load Rust/Cargo environment
+source "$HOME/.cargo/env" 2>/dev/null || true
+
 # Disable AWS CLI pager
 export AWS_PAGER=""
 

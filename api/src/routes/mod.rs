@@ -45,9 +45,13 @@ pub fn create_router(pool: PgPool) -> Router {
         .route("/assignments/{id}", put(schedules::update_assignment))
         .route("/my-assignments/{person_id}", get(schedules::get_my_assignments))
 
-        // Unavailability routes
+        // Unavailability routes (admin)
         .route("/unavailability", get(unavailability::get_all).post(unavailability::create))
         .route("/unavailability/{id}", delete(unavailability::delete))
+
+        // My unavailability routes (servidor self-service)
+        .route("/my-unavailability", get(unavailability::get_my_unavailability).post(unavailability::create_my_unavailability))
+        .route("/my-unavailability/{id}", delete(unavailability::delete_my_unavailability))
 
         // Sibling groups routes
         .route("/sibling-groups", get(sibling_groups::get_all).post(sibling_groups::create))

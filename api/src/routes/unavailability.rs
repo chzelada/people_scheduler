@@ -4,10 +4,19 @@ use axum::{
     Json,
 };
 use chrono::{DateTime, NaiveDate, Utc};
+use serde::Deserialize;
 use sqlx::{FromRow, PgPool};
 use uuid::Uuid;
 
+use crate::auth::Claims;
 use crate::models::{CreateUnavailability, Unavailability, UnavailabilityWithPerson};
+
+// Input for servidor self-service unavailability
+#[derive(Debug, Deserialize)]
+pub struct CreateMyUnavailability {
+    pub dates: Vec<NaiveDate>,  // List of dates to mark as unavailable
+    pub reason: Option<String>,
+}
 
 #[derive(FromRow)]
 struct UnavailabilityRow {
@@ -95,6 +104,101 @@ pub async fn delete(
 
     if result.rows_affected() == 0 {
         return Err((StatusCode::NOT_FOUND, "Unavailability not found".to_string()));
+    }
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+// ============ Self-service endpoints for servidores ============
+
+// Get my unavailability records
+pub async fn get_my_unavailability(
+    State(pool): State<PgPool>,
+    claims: Claims,
+) -> Result<Json<Vec<Unavailability>>, (StatusCode, String)> {
+    let person_id = claims.person_id.ok_or((
+        StatusCode::FORBIDDEN,
+        "No tiene un servidor vinculado a su cuenta".to_string(),
+    ))?;
+
+    let records = sqlx::query_as::<_, Unavailability>(
+        r#"
+        SELECT id, person_id, start_date, end_date, reason, recurring, created_at
+        FROM unavailability
+        WHERE person_id = $1
+        ORDER BY start_date ASC
+        "#
+    )
+    .bind(&person_id)
+    .fetch_all(&pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(Json(records))
+}
+
+// Create my unavailability (multiple dates at once)
+pub async fn create_my_unavailability(
+    State(pool): State<PgPool>,
+    claims: Claims,
+    Json(input): Json<CreateMyUnavailability>,
+) -> Result<Json<Vec<Unavailability>>, (StatusCode, String)> {
+    let person_id = claims.person_id.ok_or((
+        StatusCode::FORBIDDEN,
+        "No tiene un servidor vinculado a su cuenta".to_string(),
+    ))?;
+
+    if input.dates.is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "Debe seleccionar al menos una fecha".to_string()));
+    }
+
+    let mut created: Vec<Unavailability> = Vec::new();
+
+    for date in input.dates {
+        let id = Uuid::new_v4().to_string();
+
+        let unavailability = sqlx::query_as::<_, Unavailability>(
+            r#"
+            INSERT INTO unavailability (id, person_id, start_date, end_date, reason, recurring)
+            VALUES ($1, $2, $3, $3, $4, false)
+            RETURNING *
+            "#
+        )
+        .bind(&id)
+        .bind(&person_id)
+        .bind(&date)
+        .bind(&input.reason)
+        .fetch_one(&pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+        created.push(unavailability);
+    }
+
+    Ok(Json(created))
+}
+
+// Delete my unavailability (only if it belongs to me)
+pub async fn delete_my_unavailability(
+    State(pool): State<PgPool>,
+    claims: Claims,
+    Path(id): Path<String>,
+) -> Result<StatusCode, (StatusCode, String)> {
+    let person_id = claims.person_id.ok_or((
+        StatusCode::FORBIDDEN,
+        "No tiene un servidor vinculado a su cuenta".to_string(),
+    ))?;
+
+    // Only delete if it belongs to the authenticated user
+    let result = sqlx::query("DELETE FROM unavailability WHERE id = $1 AND person_id = $2")
+        .bind(&id)
+        .bind(&person_id)
+        .execute(&pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    if result.rows_affected() == 0 {
+        return Err((StatusCode::NOT_FOUND, "Ausencia no encontrada o no le pertenece".to_string()));
     }
 
     Ok(StatusCode::NO_CONTENT)

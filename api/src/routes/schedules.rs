@@ -190,11 +190,17 @@ pub async fn generate(
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
+    tracing::info!("Found {} active jobs", jobs.len());
+    for job in &jobs {
+        tracing::info!("Job: {} (id={}, people_required={})", job.name, job.id, job.people_required);
+    }
+
     // Generate assignments using the algorithm
     let mut dates_with_assignments = Vec::new();
 
     for sd in service_dates {
         let mut assignments = Vec::new();
+        tracing::info!("Processing service date: {}", sd.service_date);
 
         for job in &jobs {
             let job_assignments = generate_job_assignments(
@@ -204,6 +210,7 @@ pub async fn generate(
                 year,
             ).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
 
+            tracing::info!("  Job {}: {} assignments generated", job.name, job_assignments.len());
             assignments.extend(job_assignments);
         }
 
@@ -290,7 +297,10 @@ async fn generate_job_assignments(
     .await
     .map_err(|e| e.to_string())?;
 
+    tracing::info!("    Found {} candidates for job {}", candidates.len(), job.name);
+
     if candidates.is_empty() {
+        tracing::warn!("    No candidates available for {} on {}", job.name, service_date.service_date);
         return Ok(Vec::new());
     }
 
@@ -365,46 +375,35 @@ async fn generate_job_assignments(
         person_bags.insert(person.id.clone(), bag);
     }
 
-    // Assign positions using scarcity algorithm
+    // Assign positions using simplified algorithm
+    // Prioritize positions in bags, but fall back to any unassigned person
     let mut assignments: Vec<AssignmentWithDetails> = Vec::new();
     let mut assigned_positions: Vec<i32> = Vec::new();
     let mut assigned_people: Vec<String> = Vec::new();
 
-    for _ in 0..num_positions {
-        // Find scarcest position (fewest people have it in their bag)
-        let mut position_counts: HashMap<i32, usize> = HashMap::new();
-        for pos in 1..=num_positions {
-            if assigned_positions.contains(&pos) {
-                continue;
-            }
-            let count = person_bags
-                .iter()
-                .filter(|(pid, bag)| !assigned_people.contains(pid) && bag.contains(&pos))
-                .count();
-            position_counts.insert(pos, count);
-        }
-
-        if position_counts.is_empty() {
-            break;
-        }
-
-        // Get position with minimum count (scarcest)
-        let (&scarce_pos, _) = position_counts
-            .iter()
-            .min_by_key(|(_, &count)| count)
-            .unwrap();
-
-        // Find person with smallest bag who has this position
+    for pos in 1..=num_positions {
+        // Find person with this position in their bag (rotation preference)
         let mut candidates_for_pos: Vec<(&String, usize)> = person_bags
             .iter()
-            .filter(|(pid, bag)| !assigned_people.contains(pid) && bag.contains(&scarce_pos))
+            .filter(|(pid, bag)| !assigned_people.contains(pid) && bag.contains(&pos))
             .map(|(pid, bag)| (pid, bag.len()))
             .collect();
 
+        // Sort by smallest bag (most constrained first)
         candidates_for_pos.sort_by_key(|(_, bag_size)| *bag_size);
 
-        if let Some((person_id, _)) = candidates_for_pos.first() {
-            let person_id = (*person_id).clone();
+        // If no one has this position in their bag, fall back to any unassigned person
+        let person_id = if let Some((pid, _)) = candidates_for_pos.first() {
+            (*pid).clone()
+        } else {
+            // Fallback: pick any unassigned person from selected
+            match selected.iter().find(|p| !assigned_people.contains(&p.id)) {
+                Some(p) => p.id.clone(),
+                None => break, // No more people available
+            }
+        };
+
+        if !assigned_people.contains(&person_id) {
             let person = selected.iter().find(|p| p.id == person_id).unwrap();
 
             // Get position name
@@ -412,7 +411,7 @@ async fn generate_job_assignments(
                 "SELECT name FROM job_positions WHERE job_id = $1 AND position_number = $2"
             )
             .bind(&job.id)
-            .bind(scarce_pos)
+            .bind(pos)
             .fetch_optional(pool)
             .await
             .map_err(|e| e.to_string())?;
@@ -429,7 +428,7 @@ async fn generate_job_assignments(
             .bind(&service_date.id)
             .bind(&job.id)
             .bind(&person_id)
-            .bind(scarce_pos)
+            .bind(pos)
             .bind(&position_name)
             .execute(pool)
             .await
@@ -450,7 +449,7 @@ async fn generate_job_assignments(
             .bind(&service_date.service_date)
             .bind(year)
             .bind(week_number)
-            .bind(scarce_pos)
+            .bind(pos)
             .execute(pool)
             .await
             .map_err(|e| e.to_string())?;
@@ -461,7 +460,7 @@ async fn generate_job_assignments(
                     service_date_id: service_date.id.clone(),
                     job_id: job.id.clone(),
                     person_id: person_id.clone(),
-                    position: Some(scarce_pos),
+                    position: Some(pos),
                     position_name: position_name.clone(),
                     manual_override: Some(false),
                     created_at: None,
@@ -471,7 +470,7 @@ async fn generate_job_assignments(
                 job_name: job.name.clone(),
             });
 
-            assigned_positions.push(scarce_pos);
+            assigned_positions.push(pos);
             assigned_people.push(person_id);
         }
     }

@@ -24,6 +24,7 @@ pub struct Claims {
     pub sub: String,      // user id
     pub username: String,
     pub role: String,
+    pub person_id: Option<String>,  // linked person for servidores
     pub exp: i64,         // expiration time
     pub iat: i64,         // issued at
 }
@@ -86,6 +87,7 @@ pub fn generate_token(user: &User) -> Result<String, jsonwebtoken::errors::Error
         sub: user.id.to_string(),
         username: user.username.clone(),
         role: user.role.clone(),
+        person_id: user.person_id.clone(),
         exp: exp.timestamp(),
         iat: now.timestamp(),
     };
