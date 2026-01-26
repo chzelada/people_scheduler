@@ -35,8 +35,13 @@ export function ServidorDashboard() {
     }
   };
 
-  const nextAssignment = assignments[0];
-  const upcomingAssignments = assignments.slice(0, 5);
+  // Separate upcoming and past assignments
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const upcomingAssignments = assignments.filter(a => parseISO(a.service_date) >= today);
+  const pastAssignments = assignments.filter(a => parseISO(a.service_date) < today);
+  const nextAssignment = upcomingAssignments[0];
 
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -162,10 +167,14 @@ export function ServidorDashboard() {
               <Calendar className="w-8 h-8 text-gray-400" />
             </div>
             <h2 className="text-xl font-semibold text-gray-700 mb-2">
-              No tienes servicios programados
+              {pastAssignments.length > 0
+                ? 'No tienes servicios próximos'
+                : 'No tienes servicios programados'}
             </h2>
             <p className="text-gray-500">
-              Cuando te asignen un servicio, aparecerá aquí
+              {pastAssignments.length > 0
+                ? 'Revisa tu historial de servicios abajo'
+                : 'Cuando te asignen un servicio, aparecerá aquí'}
             </p>
           </div>
         )}
@@ -177,7 +186,7 @@ export function ServidorDashboard() {
               <h3 className="text-lg font-semibold text-gray-900">Próximos Servicios</h3>
             </div>
             <ul className="divide-y divide-gray-100">
-              {upcomingAssignments.map((assignment, index) => (
+              {upcomingAssignments.slice(1).map((assignment, index) => (
                 <li key={index} className="px-6 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors">
                   <div className="flex items-center space-x-4">
                     <div className="w-12 h-12 rounded-xl flex flex-col items-center justify-center bg-gray-100">
@@ -199,6 +208,45 @@ export function ServidorDashboard() {
                   </div>
                   <span
                     className="px-3 py-1 rounded-full text-sm font-medium text-white"
+                    style={{ backgroundColor: assignment.job_color }}
+                  >
+                    {assignment.job_name}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* Past Assignments */}
+        {pastAssignments.length > 0 && (
+          <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-100">
+              <h3 className="text-lg font-semibold text-gray-900">Servicios Anteriores</h3>
+            </div>
+            <ul className="divide-y divide-gray-100">
+              {pastAssignments.slice(0, 10).map((assignment, index) => (
+                <li key={index} className="px-6 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors opacity-60">
+                  <div className="flex items-center space-x-4">
+                    <div className="w-12 h-12 rounded-xl flex flex-col items-center justify-center bg-gray-50">
+                      <span className="text-xs text-gray-400 uppercase">
+                        {format(parseISO(assignment.service_date), 'MMM', { locale: es })}
+                      </span>
+                      <span className="text-lg font-bold text-gray-500">
+                        {format(parseISO(assignment.service_date), 'd')}
+                      </span>
+                    </div>
+                    <div>
+                      <p className="font-medium text-gray-600">
+                        {format(parseISO(assignment.service_date), 'EEEE', { locale: es })}
+                      </p>
+                      <p className="text-sm text-gray-400">
+                        {assignment.position_name || 'Sin posición asignada'}
+                      </p>
+                    </div>
+                  </div>
+                  <span
+                    className="px-3 py-1 rounded-full text-sm font-medium text-white opacity-70"
                     style={{ backgroundColor: assignment.job_color }}
                   >
                     {assignment.job_name}

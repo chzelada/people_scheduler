@@ -668,7 +668,8 @@ pub async fn get_my_assignments(
     State(pool): State<PgPool>,
     Path(person_id): Path<String>,
 ) -> Result<Json<Vec<MyAssignment>>, (StatusCode, String)> {
-    // Get all upcoming assignments for this person from published schedules
+    // Get all assignments for this person from published schedules
+    // Order by: future dates first (ascending), then past dates (descending)
     let rows = sqlx::query_as::<_, (NaiveDate, String, String, Option<String>, Option<i32>, Option<String>)>(
         r#"
         SELECT
@@ -684,8 +685,10 @@ pub async fn get_my_assignments(
         JOIN jobs j ON a.job_id = j.id
         WHERE a.person_id = $1
           AND s.status = 'PUBLISHED'
-          AND sd.service_date >= CURRENT_DATE
-        ORDER BY sd.service_date ASC
+        ORDER BY
+            CASE WHEN sd.service_date >= CURRENT_DATE THEN 0 ELSE 1 END,
+            CASE WHEN sd.service_date >= CURRENT_DATE THEN sd.service_date END ASC,
+            CASE WHEN sd.service_date < CURRENT_DATE THEN sd.service_date END DESC
         "#
     )
     .bind(&person_id)
