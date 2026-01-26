@@ -1,11 +1,9 @@
-import { invoke } from '@tauri-apps/api/core';
 import type {
   Person,
+  PersonWithCredentials,
   CreatePersonRequest,
   UpdatePersonRequest,
   Job,
-  CreateJobRequest,
-  UpdateJobRequest,
   Schedule,
   GenerateScheduleRequest,
   SchedulePreview,
@@ -13,75 +11,217 @@ import type {
   Assignment,
   SiblingGroup,
   CreateSiblingGroupRequest,
-  UpdateSiblingGroupRequest,
   Unavailability,
   CreateUnavailabilityRequest,
-  UpdateUnavailabilityRequest,
   FairnessScore,
   PersonAssignmentDetail,
   EligiblePerson,
   GetEligiblePeopleRequest,
 } from '../types';
+import { useAuthStore } from '../stores/authStore';
+
+// API Base URL - change for production
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+
+// Get auth token from store
+const getAuthHeaders = (): HeadersInit => {
+  const token = useAuthStore.getState().token;
+  return token ? { 'Authorization': `Bearer ${token}` } : {};
+};
+
+// Generic fetch wrapper with error handling
+async function fetchApi<T>(
+  endpoint: string,
+  options?: RequestInit
+): Promise<T> {
+  const url = `${API_BASE_URL}/api${endpoint}`;
+
+  const response = await fetch(url, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders(),
+      ...options?.headers,
+    },
+  });
+
+  if (response.status === 401) {
+    // Token expired or invalid - logout
+    useAuthStore.getState().logout();
+    throw new Error('Sesión expirada. Por favor inicie sesión nuevamente.');
+  }
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(error || `HTTP error ${response.status}`);
+  }
+
+  // Handle empty responses (204 No Content)
+  if (response.status === 204) {
+    return undefined as T;
+  }
+
+  return response.json();
+}
+
+// Helper for GET requests
+function get<T>(endpoint: string): Promise<T> {
+  return fetchApi<T>(endpoint, { method: 'GET' });
+}
+
+// Helper for POST requests
+function post<T>(endpoint: string, body?: unknown): Promise<T> {
+  return fetchApi<T>(endpoint, {
+    method: 'POST',
+    body: body ? JSON.stringify(body) : undefined,
+  });
+}
+
+// Helper for PUT requests
+function put<T>(endpoint: string, body?: unknown): Promise<T> {
+  return fetchApi<T>(endpoint, {
+    method: 'PUT',
+    body: body ? JSON.stringify(body) : undefined,
+  });
+}
+
+// Helper for DELETE requests
+function del<T>(endpoint: string): Promise<T> {
+  return fetchApi<T>(endpoint, { method: 'DELETE' });
+}
 
 // People API
 export const peopleApi = {
-  getAll: () => invoke<Person[]>('get_all_people'),
-  get: (id: string) => invoke<Person>('get_person', { id }),
-  create: (request: CreatePersonRequest) => invoke<Person>('create_person', { request }),
-  update: (request: UpdatePersonRequest) => invoke<Person>('update_person', { request }),
-  delete: (id: string) => invoke<void>('delete_person', { id }),
-  getForJob: (jobId: string) => invoke<Person[]>('get_people_for_job', { jobId }),
+  getAll: () => get<Person[]>('/people'),
+  get: (id: string) => get<Person>(`/people/${id}`),
+  create: (request: CreatePersonRequest) => post<PersonWithCredentials>('/people', request),
+  update: (request: UpdatePersonRequest) => put<Person>(`/people/${request.id}`, request),
+  delete: (id: string) => del<void>(`/people/${id}`),
+  getForJob: async (jobId: string) => {
+    const people = await get<Person[]>('/people');
+    return people.filter(p => p.job_ids?.includes(jobId));
+  },
+  resetPassword: (personId: string) => post<{ message: string; new_password: string }>(`/people/${personId}/reset-password`),
+  createUserAccount: (personId: string) => post<{ username: string; password: string }>(`/people/${personId}/create-user`),
 };
 
 // Jobs API
 export const jobsApi = {
-  getAll: () => invoke<Job[]>('get_all_jobs'),
-  get: (id: string) => invoke<Job>('get_job', { id }),
-  create: (request: CreateJobRequest) => invoke<Job>('create_job', { request }),
-  update: (request: UpdateJobRequest) => invoke<Job>('update_job', { request }),
-  delete: (id: string) => invoke<void>('delete_job', { id }),
+  getAll: () => get<Job[]>('/jobs'),
+  get: (id: string) => get<Job>(`/jobs/${id}`),
+  getPositions: (jobId: string) => get<{ id: string; job_id: string; position_number: number; name: string }[]>(`/jobs/${jobId}/positions`),
+  // Jobs are predefined, these are no-ops for now
+  create: async () => { throw new Error('Jobs are predefined'); },
+  update: async () => { throw new Error('Jobs are predefined'); },
+  delete: async () => { throw new Error('Jobs are predefined'); },
 };
+
+// My Assignment type for servidor view
+export interface MyAssignment {
+  service_date: string;
+  job_id: string;
+  job_name: string;
+  job_color: string;
+  position?: number;
+  position_name?: string;
+}
 
 // Schedule API
 export const scheduleApi = {
-  getAll: () => invoke<Schedule[]>('get_all_schedules'),
-  get: (id: string) => invoke<Schedule>('get_schedule', { id }),
-  getByMonth: (year: number, month: number) => invoke<Schedule | null>('get_schedule_by_month', { year, month }),
-  generate: (request: GenerateScheduleRequest) => invoke<SchedulePreview>('generate_schedule', { request }),
-  save: (preview: SchedulePreview) => invoke<Schedule>('save_schedule', { preview }),
-  updateAssignment: (request: UpdateAssignmentRequest) => invoke<Assignment>('update_assignment', { request }),
-  publish: (id: string) => invoke<Schedule>('publish_schedule', { id }),
-  delete: (id: string) => invoke<void>('delete_schedule', { id }),
-  getFairnessScores: (year: number) => invoke<FairnessScore[]>('get_fairness_scores', { year }),
-  getPersonAssignmentHistory: (personId: string, startDate: string, endDate: string) =>
-    invoke<PersonAssignmentDetail[]>('get_person_assignment_history', { personId, startDate, endDate }),
-  getEligiblePeopleForAssignment: (request: GetEligiblePeopleRequest) =>
-    invoke<EligiblePerson[]>('get_eligible_people_for_assignment', { request }),
+  getAll: () => get<Schedule[]>('/schedules'),
+  get: (id: string) => get<Schedule>(`/schedules/${id}`),
+  getByMonth: async (year: number, month: number) => {
+    const schedules = await get<Schedule[]>('/schedules');
+    return schedules.find(s => s.year === year && s.month === month) || null;
+  },
+  generate: (request: GenerateScheduleRequest) => post<SchedulePreview>('/schedules', request),
+  save: async (preview: SchedulePreview) => {
+    // In the web version, generate already saves the schedule
+    return preview.schedule;
+  },
+  updateAssignment: (request: UpdateAssignmentRequest) =>
+    put<Assignment>(`/assignments/${request.assignment_id}`, { person_id: request.new_person_id }),
+  publish: (id: string) => post<Schedule>(`/schedules/${id}/publish`),
+  delete: (id: string) => del<void>(`/schedules/${id}`),
+  getFairnessScores: (year: number) => get<FairnessScore[]>(`/reports/fairness?year=${year}`),
+  getMyAssignments: (personId: string) => get<MyAssignment[]>(`/my-assignments/${personId}`),
+  getPersonAssignmentHistory: async (personId: string, _startDate: string, _endDate: string) => {
+    const history = await get<PersonAssignmentDetail[]>(`/reports/person/${personId}/history`);
+    return history;
+  },
+  getEligiblePeopleForAssignment: async (request: GetEligiblePeopleRequest) => {
+    // Get all people qualified for the job and filter by availability
+    const people = await get<Person[]>('/people');
+    const eligible: EligiblePerson[] = people
+      .filter(p => p.active && p.job_ids?.includes(request.job_id))
+      .map(p => ({
+        id: p.id,
+        first_name: p.first_name,
+        last_name: p.last_name,
+        is_available: true,
+        is_qualified: true,
+        passes_consecutive_check: true,
+        sibling_status: 'neutral' as const,
+        assignments_this_year: 0,
+      }));
+    return eligible;
+  },
 };
 
 // Sibling Groups API
 export const siblingApi = {
-  getAll: () => invoke<SiblingGroup[]>('get_all_sibling_groups'),
-  get: (id: string) => invoke<SiblingGroup>('get_sibling_group', { id }),
-  create: (request: CreateSiblingGroupRequest) => invoke<SiblingGroup>('create_sibling_group', { request }),
-  update: (request: UpdateSiblingGroupRequest) => invoke<SiblingGroup>('update_sibling_group', { request }),
-  delete: (id: string) => invoke<void>('delete_sibling_group', { id }),
-  getForPerson: (personId: string) => invoke<SiblingGroup[]>('get_person_sibling_groups', { personId }),
+  getAll: () => get<SiblingGroup[]>('/sibling-groups'),
+  get: (id: string) => get<SiblingGroup>(`/sibling-groups/${id}`),
+  create: (request: CreateSiblingGroupRequest) => post<SiblingGroup>('/sibling-groups', request),
+  update: (request: CreateSiblingGroupRequest & { id: string }) =>
+    put<SiblingGroup>(`/sibling-groups/${request.id}`, request),
+  delete: (id: string) => del<void>(`/sibling-groups/${id}`),
+  getForPerson: async (personId: string) => {
+    const groups = await get<SiblingGroup[]>('/sibling-groups');
+    return groups.filter(g => g.member_ids?.includes(personId));
+  },
 };
 
 // Unavailability API
 export const unavailabilityApi = {
-  getAll: () => invoke<Unavailability[]>('get_all_unavailability'),
-  getForPerson: (personId: string) => invoke<Unavailability[]>('get_person_unavailability', { personId }),
-  get: (id: string) => invoke<Unavailability>('get_unavailability', { id }),
-  create: (request: CreateUnavailabilityRequest) => invoke<Unavailability>('create_unavailability', { request }),
-  update: (request: UpdateUnavailabilityRequest) => invoke<Unavailability>('update_unavailability', { request }),
-  delete: (id: string) => invoke<void>('delete_unavailability', { id }),
-  checkAvailability: (personId: string, date: string) => invoke<boolean>('check_availability', { personId, date }),
+  getAll: () => get<Unavailability[]>('/unavailability'),
+  getForPerson: async (personId: string) => {
+    const all = await get<Unavailability[]>('/unavailability');
+    return all.filter(u => u.person_id === personId);
+  },
+  get: (id: string) => get<Unavailability>(`/unavailability/${id}`),
+  create: (request: CreateUnavailabilityRequest) => post<Unavailability>('/unavailability', request),
+  update: async (request: { id: string; person_id?: string; start_date?: string; end_date?: string; reason?: string; recurring?: boolean }) => {
+    // Get existing record to fill in missing fields
+    const existing = await get<Unavailability>(`/unavailability/${request.id}`);
+    // Delete and recreate since we don't have an update endpoint
+    await del<void>(`/unavailability/${request.id}`);
+    return post<Unavailability>('/unavailability', {
+      person_id: request.person_id || existing.person_id,
+      start_date: request.start_date || existing.start_date,
+      end_date: request.end_date || existing.end_date,
+      reason: request.reason !== undefined ? request.reason : existing.reason,
+      recurring: request.recurring !== undefined ? request.recurring : existing.recurring,
+    });
+  },
+  delete: (id: string) => del<void>(`/unavailability/${id}`),
+  checkAvailability: async (personId: string, date: string) => {
+    const unavailability = await get<Unavailability[]>('/unavailability');
+    const dateObj = new Date(date);
+    return !unavailability.some(u =>
+      u.person_id === personId &&
+      new Date(u.start_date) <= dateObj &&
+      new Date(u.end_date) >= dateObj
+    );
+  },
 };
 
-// Export API
+// Export API - not available in web version
 export const exportApi = {
-  exportSchedule: (scheduleId: string) => invoke<string>('export_schedule', { scheduleId }),
-  exportToPath: (scheduleId: string, path: string) => invoke<void>('export_schedule_to_path', { scheduleId, path }),
+  exportSchedule: async (_scheduleId: string) => {
+    throw new Error('Excel export not available in web version');
+  },
+  exportToPath: async (_scheduleId: string, _path: string) => {
+    throw new Error('Excel export not available in web version');
+  },
 };

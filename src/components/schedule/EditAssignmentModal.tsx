@@ -129,7 +129,7 @@ export function EditAssignmentModal({
             )}
           </div>
           <div className="text-sm text-gray-600 mt-1">
-            <span className="font-medium">Persona actual:</span>{' '}
+            <span className="font-medium">Servidor actual:</span>{' '}
             <span className="text-primary-600">{assignment?.person_name}</span>
           </div>
         </div>
@@ -139,7 +139,7 @@ export function EditAssignmentModal({
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
           <input
             type="text"
-            placeholder="Buscar persona..."
+            placeholder="Buscar servidor..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
@@ -231,7 +231,7 @@ export function EditAssignmentModal({
             })
           ) : (
             <div className="p-4 text-center text-gray-500 text-sm">
-              No se encontraron personas
+              No se encontraron servidores
             </div>
           )}
         </div>

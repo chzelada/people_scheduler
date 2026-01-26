@@ -5,7 +5,7 @@ import type {
   GenerateScheduleRequest,
   SchedulePreview,
   UpdateAssignmentRequest,
-  FairnessScore
+  FairnessScore,
 } from '../types';
 
 interface ScheduleState {
@@ -74,7 +74,13 @@ export const useScheduleStore = create<ScheduleState>((set, get) => ({
   generateSchedule: async (request: GenerateScheduleRequest) => {
     set({ isGenerating: true, error: null });
     try {
-      const preview = await scheduleApi.generate(request);
+      const response = await scheduleApi.generate(request);
+      // The API returns ScheduleWithDates flattened, wrap it in SchedulePreview format
+      const preview: SchedulePreview = {
+        schedule: response as unknown as Schedule,
+        conflicts: [],
+        fairness_scores: [],
+      };
       set({ preview, isGenerating: false });
       return preview;
     } catch (error) {
@@ -138,8 +144,11 @@ export const useScheduleStore = create<ScheduleState>((set, get) => ({
     try {
       const schedule = await scheduleApi.publish(id);
       set((state) => ({
-        schedules: state.schedules.map(s => s.id === schedule.id ? schedule : s),
-        currentSchedule: state.currentSchedule?.id === schedule.id ? schedule : state.currentSchedule,
+        schedules: state.schedules.map(s => s.id === schedule.id ? { ...s, status: schedule.status, published_at: schedule.published_at } : s),
+        // Only update status fields, keep service_dates intact
+        currentSchedule: state.currentSchedule?.id === schedule.id
+          ? { ...state.currentSchedule, status: schedule.status, published_at: schedule.published_at }
+          : state.currentSchedule,
         isLoading: false,
       }));
     } catch (error) {

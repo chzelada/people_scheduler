@@ -9,11 +9,25 @@ import {
   Reports,
   Settings,
 } from "./pages";
+import { ServidorDashboard } from "./pages/ServidorDashboard";
+import { Login } from "./pages/Login";
+import { useAuthStore } from "./stores/authStore";
 
 type Page = 'dashboard' | 'people' | 'schedule' | 'unavailability' | 'siblings' | 'reports' | 'settings';
 
 function App() {
   const [currentPage, setCurrentPage] = useState<Page>('dashboard');
+  const { isAuthenticated, user } = useAuthStore();
+
+  // If not authenticated, show login page
+  if (!isAuthenticated) {
+    return <Login />;
+  }
+
+  // If user is a servidor (not admin), show the servidor dashboard
+  if (user?.role === 'servidor') {
+    return <ServidorDashboard />;
+  }
 
   const renderPage = () => {
     switch (currentPage) {

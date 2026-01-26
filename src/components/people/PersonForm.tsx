@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Key, UserPlus } from 'lucide-react';
 import { Button, Input, Select, Textarea } from '../common';
 import type { Person, CreatePersonRequest, UpdatePersonRequest, Job } from '../../types';
 
@@ -7,20 +8,32 @@ interface PersonFormProps {
   jobs: Job[];
   onSubmit: (data: CreatePersonRequest | UpdatePersonRequest) => Promise<void>;
   onCancel: () => void;
+  onResetPassword?: (person: Person) => void;
+  onCreateUser?: (person: Person) => void;
   isLoading?: boolean;
 }
 
-export function PersonForm({ person, jobs, onSubmit, onCancel, isLoading }: PersonFormProps) {
-  const [formData, setFormData] = useState({
+export function PersonForm({ person, jobs, onSubmit, onCancel, onResetPassword, onCreateUser, isLoading }: PersonFormProps) {
+  const [formData, setFormData] = useState<{
+    first_name: string;
+    last_name: string;
+    email: string;
+    phone: string;
+    preferred_frequency: 'weekly' | 'bimonthly' | 'monthly';
+    max_consecutive_weeks: number;
+    preference_level: number;
+    notes: string;
+    job_ids: string[];
+  }>({
     first_name: '',
     last_name: '',
     email: '',
     phone: '',
-    preferred_frequency: 'bimonthly' as const,
+    preferred_frequency: 'bimonthly',
     max_consecutive_weeks: 2,
     preference_level: 5,
     notes: '',
-    job_ids: [] as string[],
+    job_ids: [],
   });
 
   useEffect(() => {
@@ -150,12 +163,57 @@ export function PersonForm({ person, jobs, onSubmit, onCancel, isLoading }: Pers
         rows={3}
       />
 
+      {/* Account management section - only for editing existing person */}
+      {person && (
+        <div className="border-t border-gray-200 pt-4 mt-4">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Cuenta de Usuario
+          </label>
+          {person.username ? (
+            <div className="flex items-center justify-between bg-gray-50 rounded-lg p-3">
+              <div>
+                <span className="text-sm text-gray-500">Usuario: </span>
+                <code className="font-mono font-medium text-gray-900">@{person.username}</code>
+              </div>
+              {onResetPassword && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => onResetPassword(person)}
+                >
+                  <Key className="w-4 h-4 mr-1" />
+                  Resetear Contraseña
+                </Button>
+              )}
+            </div>
+          ) : (
+            <div className="flex items-center justify-between bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+              <span className="text-sm text-yellow-800">
+                Este servidor no tiene cuenta de usuario
+              </span>
+              {onCreateUser && (
+                <Button
+                  type="button"
+                  variant="primary"
+                  size="sm"
+                  onClick={() => onCreateUser(person)}
+                >
+                  <UserPlus className="w-4 h-4 mr-1" />
+                  Crear Cuenta
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="flex justify-end space-x-3 pt-4">
         <Button type="button" variant="secondary" onClick={onCancel}>
           Cancelar
         </Button>
         <Button type="submit" isLoading={isLoading}>
-          {person ? 'Actualizar' : 'Crear'} Persona
+          {person ? 'Actualizar' : 'Crear'} Servidor
         </Button>
       </div>
     </form>

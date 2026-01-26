@@ -240,13 +240,13 @@ export function SiblingGroups() {
                 type="text"
                 value={memberSearchQuery}
                 onChange={(e) => setMemberSearchQuery(e.target.value)}
-                placeholder="Buscar personas..."
+                placeholder="Buscar servidores..."
                 className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 text-sm"
               />
             </div>
             <div className="max-h-60 overflow-y-auto border border-gray-300 rounded-md p-2 space-y-1">
               {filteredPeople.length === 0 ? (
-                <p className="text-sm text-gray-500 text-center py-2">No se encontraron personas</p>
+                <p className="text-sm text-gray-500 text-center py-2">No se encontraron servidores</p>
               ) : (
                 filteredPeople.map((person) => (
                   <label key={person.id} className="flex items-center p-2 hover:bg-gray-50 rounded">

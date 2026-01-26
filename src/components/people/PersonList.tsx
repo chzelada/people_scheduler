@@ -1,5 +1,5 @@
 import React from 'react';
-import { Edit, Trash2, Check, X } from 'lucide-react';
+import { Edit, Trash2, Check, X, Key, UserPlus } from 'lucide-react';
 import { Table, Button } from '../common';
 import type { Person, Job } from '../../types';
 
@@ -8,6 +8,8 @@ interface PersonListProps {
   jobs: Job[];
   onEdit: (person: Person) => void;
   onDelete: (person: Person) => void;
+  onResetPassword?: (person: Person) => void;
+  onCreateUser?: (person: Person) => void;
 }
 
 const frequencyLabels: Record<string, string> = {
@@ -16,7 +18,7 @@ const frequencyLabels: Record<string, string> = {
   monthly: 'Mensual',
 };
 
-export function PersonList({ people, jobs, onEdit, onDelete }: PersonListProps) {
+export function PersonList({ people, jobs, onEdit, onDelete, onResetPassword, onCreateUser }: PersonListProps) {
   const getJobNames = (jobIds: string[]) => {
     return jobIds
       .map((id) => jobs.find((j) => j.id === id)?.name)
@@ -31,7 +33,9 @@ export function PersonList({ people, jobs, onEdit, onDelete }: PersonListProps) 
       render: (person: Person) => (
         <div>
           <div className="font-medium">{person.first_name} {person.last_name}</div>
-          <div className="text-gray-500 text-xs">{person.email}</div>
+          {person.username && (
+            <div className="text-gray-500 text-xs font-mono">@{person.username}</div>
+          )}
         </div>
       ),
     },
@@ -82,12 +86,32 @@ export function PersonList({ people, jobs, onEdit, onDelete }: PersonListProps) 
           <button
             onClick={(e) => { e.stopPropagation(); onEdit(person); }}
             className="text-gray-400 hover:text-primary-600"
+            title="Editar"
           >
             <Edit className="w-4 h-4" />
           </button>
+          {onCreateUser && !person.username && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onCreateUser(person); }}
+              className="text-gray-400 hover:text-green-600"
+              title="Crear cuenta de usuario"
+            >
+              <UserPlus className="w-4 h-4" />
+            </button>
+          )}
+          {onResetPassword && person.username && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onResetPassword(person); }}
+              className="text-gray-400 hover:text-orange-600"
+              title="Resetear contraseña"
+            >
+              <Key className="w-4 h-4" />
+            </button>
+          )}
           <button
             onClick={(e) => { e.stopPropagation(); onDelete(person); }}
             className="text-gray-400 hover:text-red-600"
+            title="Eliminar"
           >
             <Trash2 className="w-4 h-4" />
           </button>
@@ -101,7 +125,7 @@ export function PersonList({ people, jobs, onEdit, onDelete }: PersonListProps) 
       columns={columns}
       data={people}
       keyExtractor={(person) => person.id}
-      emptyMessage="No hay personas registradas. Haga clic en 'Agregar Persona' para comenzar."
+      emptyMessage="No hay servidores registrados. Haga clic en 'Agregar Servidor' para comenzar."
     />
   );
 }

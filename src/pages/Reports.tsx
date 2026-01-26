@@ -47,7 +47,7 @@ export function Reports() {
           <h3 className="text-lg font-medium text-gray-900 mb-4">Resumen de Estadísticas</h3>
           <div className="space-y-4">
             <div className="flex justify-between items-center py-2 border-b border-gray-100">
-              <span className="text-gray-600">Total de Voluntarios Registrados</span>
+              <span className="text-gray-600">Total de Servidores Registrados</span>
               <span className="font-medium">{fairnessScores.length}</span>
             </div>
             <div className="flex justify-between items-center py-2 border-b border-gray-100">
@@ -75,7 +75,7 @@ export function Reports() {
               </span>
             </div>
             <div className="flex justify-between items-center py-2 border-b border-gray-100">
-              <span className="text-gray-600">Promedio por Persona</span>
+              <span className="text-gray-600">Promedio por Servidor</span>
               <span className="font-medium">
                 {fairnessScores.length > 0
                   ? (fairnessScores.reduce((sum, s) => sum + s.assignments_this_year, 0) / fairnessScores.length).toFixed(1)
@@ -109,7 +109,7 @@ export function Reports() {
             <ul className="mt-2 space-y-1">
               <li><strong>Cantidad de Asignaciones (70%):</strong> Menos asignaciones = mayor prioridad</li>
               <li><strong>Recencia (20%):</strong> Más tiempo desde la última asignación = mayor prioridad</li>
-              <li><strong>Preferencia (10%):</strong> Nivel de preferencia configurado de la persona</li>
+              <li><strong>Preferencia (10%):</strong> Nivel de preferencia configurado del servidor</li>
             </ul>
             <p className="mt-4">
               Los voluntarios con menos asignaciones tienen prioridad al generar nuevos

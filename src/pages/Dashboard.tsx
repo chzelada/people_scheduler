@@ -1,6 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { Users, Calendar, AlertTriangle, CheckCircle, Database } from 'lucide-react';
-import { invoke } from '@tauri-apps/api/core';
+import React, { useEffect } from 'react';
+import { Users, Calendar, AlertTriangle, CheckCircle } from 'lucide-react';
 import { usePeopleStore } from '../stores/peopleStore';
 import { useJobsStore } from '../stores/jobsStore';
 import { useScheduleStore } from '../stores/scheduleStore';
@@ -38,38 +37,12 @@ export function Dashboard() {
   const { people, fetchPeople } = usePeopleStore();
   const { jobs, fetchJobs } = useJobsStore();
   const { schedules, fetchSchedules } = useScheduleStore();
-  const [loading, setLoading] = useState(false);
-  const [testDataMessage, setTestDataMessage] = useState('');
 
   useEffect(() => {
     fetchPeople();
     fetchJobs();
     fetchSchedules();
   }, []);
-
-  const loadTestData = async () => {
-    setLoading(true);
-    setTestDataMessage('Cargando datos...');
-    try {
-      // Import people from CSV
-      const csvPath = '/Users/chzelada/Documents/GitHub/people_scheduler/test_data/voluntarios.csv';
-      const importResult = await invoke<string>('import_test_data', { csvPath });
-      setTestDataMessage(importResult);
-
-      // Generate schedules for 2026
-      const scheduleResult = await invoke<string>('generate_year_schedules', { year: 2026 });
-      setTestDataMessage(prev => `${prev}\n${scheduleResult}`);
-
-      // Refresh data
-      await fetchPeople();
-      await fetchJobs();
-      await fetchSchedules();
-    } catch (error) {
-      setTestDataMessage(`Error: ${error}`);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const activePeople = people.filter((p) => p.active).length;
   const publishedSchedules = schedules.filter((s) => s.status === 'PUBLISHED').length;
@@ -204,26 +177,6 @@ export function Dashboard() {
               Registrar tiempo libre para voluntarios
             </p>
           </button>
-        </div>
-      </div>
-
-      {/* Test Data Section - Temporary for development */}
-      <div className="bg-yellow-50 border border-yellow-200 rounded-lg shadow p-6">
-        <h2 className="text-lg font-medium text-yellow-800 mb-4">Datos de Prueba (Desarrollo)</h2>
-        <div className="flex items-start gap-4">
-          <button
-            onClick={loadTestData}
-            disabled={loading}
-            className="flex items-center gap-2 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Database className="w-5 h-5" />
-            {loading ? 'Cargando...' : 'Cargar CSV + Generar 2026'}
-          </button>
-          {testDataMessage && (
-            <pre className="text-sm text-yellow-800 bg-yellow-100 p-3 rounded flex-1 whitespace-pre-wrap">
-              {testDataMessage}
-            </pre>
-          )}
         </div>
       </div>
     </div>

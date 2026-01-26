@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { peopleApi } from '../services/api';
-import type { Person, CreatePersonRequest, UpdatePersonRequest } from '../types';
+import type { Person, PersonWithCredentials, CreatePersonRequest, UpdatePersonRequest } from '../types';
 
 interface PeopleState {
   people: Person[];
@@ -11,9 +11,11 @@ interface PeopleState {
   // Actions
   fetchPeople: () => Promise<void>;
   fetchPerson: (id: string) => Promise<void>;
-  createPerson: (request: CreatePersonRequest) => Promise<Person>;
+  createPerson: (request: CreatePersonRequest) => Promise<PersonWithCredentials>;
   updatePerson: (request: UpdatePersonRequest) => Promise<Person>;
   deletePerson: (id: string) => Promise<void>;
+  resetPassword: (personId: string) => Promise<string>;
+  createUserAccount: (personId: string) => Promise<{ username: string; password: string }>;
   setSelectedPerson: (person: Person | null) => void;
   clearError: () => void;
 }
@@ -84,6 +86,36 @@ export const usePeopleStore = create<PeopleState>((set, get) => ({
         selectedPerson: state.selectedPerson?.id === id ? null : state.selectedPerson,
         isLoading: false,
       }));
+    } catch (error) {
+      set({ error: String(error), isLoading: false });
+      throw error;
+    }
+  },
+
+  resetPassword: async (personId: string) => {
+    set({ isLoading: true, error: null });
+    try {
+      const result = await peopleApi.resetPassword(personId);
+      set({ isLoading: false });
+      return result.new_password;
+    } catch (error) {
+      set({ error: String(error), isLoading: false });
+      throw error;
+    }
+  },
+
+  createUserAccount: async (personId: string) => {
+    set({ isLoading: true, error: null });
+    try {
+      const result = await peopleApi.createUserAccount(personId);
+      // Update the person in the list to include the new username
+      set((state) => ({
+        people: state.people.map((p) =>
+          p.id === personId ? { ...p, username: result.username } : p
+        ),
+        isLoading: false,
+      }));
+      return result;
     } catch (error) {
       set({ error: String(error), isLoading: false });
       throw error;

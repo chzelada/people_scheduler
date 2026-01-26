@@ -1,63 +1,61 @@
 import React, { useEffect, useState } from 'react';
-import { Plus, Edit, Trash2, Save } from 'lucide-react';
-import { Button, Input, Modal, Table } from '../components/common';
+import { Key, Save } from 'lucide-react';
+import { Button, Input, Table, Modal } from '../components/common';
 import { useJobsStore } from '../stores/jobsStore';
-import type { Job, CreateJobRequest, UpdateJobRequest } from '../types';
+import { useAuthStore } from '../stores/authStore';
+import type { Job } from '../types';
 
 export function Settings() {
-  const { jobs, fetchJobs, createJob, updateJob, deleteJob, isLoading } = useJobsStore();
-  const [isJobModalOpen, setIsJobModalOpen] = useState(false);
-  const [editingJob, setEditingJob] = useState<Job | null>(null);
-  const [jobForm, setJobForm] = useState({
-    name: '',
-    description: '',
-    people_required: 4,
-    color: '#3B82F6',
+  const { jobs, fetchJobs } = useJobsStore();
+  const { changePassword, isLoading, error, clearError } = useAuthStore();
+
+  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: '',
   });
+  const [passwordError, setPasswordError] = useState('');
+  const [passwordSuccess, setPasswordSuccess] = useState(false);
 
   useEffect(() => {
     fetchJobs();
   }, []);
 
-  const handleJobSubmit = async (e: React.FormEvent) => {
+  const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (editingJob) {
-      await updateJob({
-        id: editingJob.id,
-        ...jobForm,
-      });
-    } else {
-      await createJob(jobForm);
+    setPasswordError('');
+    setPasswordSuccess(false);
+
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      setPasswordError('Las contraseñas no coinciden');
+      return;
     }
-    closeJobModal();
-  };
 
-  const handleEditJob = (job: Job) => {
-    setEditingJob(job);
-    setJobForm({
-      name: job.name,
-      description: job.description || '',
-      people_required: job.people_required,
-      color: job.color,
-    });
-    setIsJobModalOpen(true);
-  };
+    if (passwordForm.newPassword.length < 6) {
+      setPasswordError('La nueva contraseña debe tener al menos 6 caracteres');
+      return;
+    }
 
-  const handleDeleteJob = async (job: Job) => {
-    if (window.confirm(`¿Eliminar el servicio "${job.name}"? Esto puede afectar horarios existentes.`)) {
-      await deleteJob(job.id);
+    try {
+      await changePassword(passwordForm.currentPassword, passwordForm.newPassword);
+      setPasswordSuccess(true);
+      setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      setTimeout(() => {
+        setIsPasswordModalOpen(false);
+        setPasswordSuccess(false);
+      }, 2000);
+    } catch (err) {
+      setPasswordError(String(err));
     }
   };
 
-  const closeJobModal = () => {
-    setIsJobModalOpen(false);
-    setEditingJob(null);
-    setJobForm({
-      name: '',
-      description: '',
-      people_required: 4,
-      color: '#3B82F6',
-    });
+  const closePasswordModal = () => {
+    setIsPasswordModalOpen(false);
+    setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+    setPasswordError('');
+    setPasswordSuccess(false);
+    clearError();
   };
 
   const jobColumns = [
@@ -86,7 +84,7 @@ export function Settings() {
     },
     {
       key: 'required',
-      header: 'Personas Requeridas',
+      header: 'Servidores Requeridos',
       render: (job: Job) => job.people_required,
     },
     {
@@ -102,26 +100,6 @@ export function Settings() {
         </span>
       ),
     },
-    {
-      key: 'actions',
-      header: '',
-      render: (job: Job) => (
-        <div className="flex space-x-2">
-          <button
-            onClick={() => handleEditJob(job)}
-            className="text-gray-400 hover:text-primary-600"
-          >
-            <Edit className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => handleDeleteJob(job)}
-            className="text-gray-400 hover:text-red-600"
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
-        </div>
-      ),
-    },
   ];
 
   return (
@@ -131,25 +109,30 @@ export function Settings() {
         <p className="text-gray-500 mt-1">Configurar servicios y ajustes de la aplicación</p>
       </div>
 
+      {/* Account Section */}
+      <div className="bg-white rounded-lg shadow p-6">
+        <h2 className="text-lg font-medium text-gray-900 mb-4">Cuenta</h2>
+        <Button onClick={() => setIsPasswordModalOpen(true)}>
+          <Key className="w-4 h-4 mr-2" />
+          Cambiar Contraseña
+        </Button>
+      </div>
+
       {/* Jobs Section */}
       <div className="bg-white rounded-lg shadow">
-        <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+        <div className="px-6 py-4 border-b border-gray-200">
           <div>
             <h2 className="text-lg font-medium text-gray-900">Servicios</h2>
             <p className="text-sm text-gray-500 mt-1">
-              Configurar los tipos de posiciones de voluntarios
+              Servicios predefinidos de voluntarios
             </p>
           </div>
-          <Button onClick={() => setIsJobModalOpen(true)}>
-            <Plus className="w-4 h-4 mr-2" />
-            Agregar Servicio
-          </Button>
         </div>
         <Table
           columns={jobColumns}
           data={jobs}
           keyExtractor={(job) => job.id}
-          emptyMessage="No hay servicios configurados. Agregue el primero para comenzar."
+          emptyMessage="No hay servicios configurados."
         />
       </div>
 
@@ -161,68 +144,61 @@ export function Settings() {
           <p>Versión 0.1.0</p>
           <p>Una aplicación de programación de voluntarios para iglesias con algoritmos de distribución equitativa.</p>
           <p className="mt-4">
-            Los datos se almacenan localmente en una base de datos DuckDB en el directorio de datos de la aplicación.
+            Los datos se almacenan en la nube usando PostgreSQL.
           </p>
         </div>
       </div>
 
-      {/* Job Modal */}
+      {/* Password Modal */}
       <Modal
-        isOpen={isJobModalOpen}
-        onClose={closeJobModal}
-        title={editingJob ? 'Editar Servicio' : 'Agregar Servicio'}
+        isOpen={isPasswordModalOpen}
+        onClose={closePasswordModal}
+        title="Cambiar Contraseña"
       >
-        <form onSubmit={handleJobSubmit} className="space-y-4">
+        <form onSubmit={handlePasswordSubmit} className="space-y-4">
+          {passwordSuccess && (
+            <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg text-sm">
+              Contraseña cambiada exitosamente
+            </div>
+          )}
+
+          {(passwordError || error) && (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+              {passwordError || error}
+            </div>
+          )}
+
           <Input
-            label="Nombre del Servicio"
-            value={jobForm.name}
-            onChange={(e) => setJobForm({ ...jobForm, name: e.target.value })}
-            placeholder="ej. Lectores"
+            label="Contraseña Actual"
+            type="password"
+            value={passwordForm.currentPassword}
+            onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })}
             required
           />
 
           <Input
-            label="Descripción"
-            value={jobForm.description}
-            onChange={(e) => setJobForm({ ...jobForm, description: e.target.value })}
-            placeholder="ej. Lectores de las escrituras"
+            label="Nueva Contraseña"
+            type="password"
+            value={passwordForm.newPassword}
+            onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
+            required
           />
 
           <Input
-            label="Personas Requeridas"
-            type="number"
-            min={1}
-            max={20}
-            value={jobForm.people_required}
-            onChange={(e) => setJobForm({ ...jobForm, people_required: parseInt(e.target.value) })}
+            label="Confirmar Nueva Contraseña"
+            type="password"
+            value={passwordForm.confirmPassword}
+            onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
+            required
           />
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Color
-            </label>
-            <div className="flex items-center space-x-3">
-              <input
-                type="color"
-                value={jobForm.color}
-                onChange={(e) => setJobForm({ ...jobForm, color: e.target.value })}
-                className="h-10 w-20 border border-gray-300 rounded cursor-pointer"
-              />
-              <Input
-                value={jobForm.color}
-                onChange={(e) => setJobForm({ ...jobForm, color: e.target.value })}
-                className="flex-1"
-              />
-            </div>
-          </div>
-
           <div className="flex justify-end space-x-3 pt-4">
-            <Button type="button" variant="secondary" onClick={closeJobModal}>
+            <Button type="button" variant="secondary" onClick={closePasswordModal}>
               Cancelar
             </Button>
             <Button type="submit" isLoading={isLoading}>
               <Save className="w-4 h-4 mr-2" />
-              {editingJob ? 'Actualizar' : 'Crear'} Servicio
+              Guardar
             </Button>
           </div>
         </form>

@@ -13,6 +13,13 @@ export interface Person {
   created_at?: string;
   updated_at?: string;
   job_ids: string[];
+  username?: string;
+}
+
+// Returned when creating a new person (includes password shown once)
+export interface PersonWithCredentials extends Person {
+  username: string; // Always present when creating a new servidor
+  generated_password: string;
 }
 
 export type PreferredFrequency = 'weekly' | 'bimonthly' | 'monthly';

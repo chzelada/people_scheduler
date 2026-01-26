@@ -5,3 +5,4 @@ export { UnavailabilityManagement } from './UnavailabilityManagement';
 export { SiblingGroups } from './SiblingGroups';
 export { Reports } from './Reports';
 export { Settings } from './Settings';
+export { ServidorDashboard } from './ServidorDashboard';

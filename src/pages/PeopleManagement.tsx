@@ -1,10 +1,10 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { Plus, Search, Upload, AlertCircle, CheckCircle, X } from 'lucide-react';
+import { Plus, Search, Upload, AlertCircle, CheckCircle, X, Key, Copy, Check } from 'lucide-react';
 import { Button, Modal, Input } from '../components/common';
 import { PersonList, PersonForm } from '../components/people';
 import { usePeopleStore } from '../stores/peopleStore';
 import { useJobsStore } from '../stores/jobsStore';
-import type { Person, CreatePersonRequest, UpdatePersonRequest } from '../types';
+import type { Person, PersonWithCredentials, CreatePersonRequest, UpdatePersonRequest } from '../types';
 
 interface CsvPerson {
   first_name: string;
@@ -20,12 +20,21 @@ interface ImportResult {
   errors: { row: number; error: string }[];
 }
 
+interface CreatedCredentials {
+  personName: string;
+  username: string;
+  password: string;
+}
+
 export function PeopleManagement() {
-  const { people, fetchPeople, createPerson, updatePerson, deletePerson, isLoading } = usePeopleStore();
+  const { people, fetchPeople, createPerson, updatePerson, deletePerson, resetPassword, createUserAccount, isLoading } = usePeopleStore();
   const { jobs, fetchJobs } = useJobsStore();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isCredentialsModalOpen, setIsCredentialsModalOpen] = useState(false);
+  const [createdCredentials, setCreatedCredentials] = useState<CreatedCredentials | null>(null);
+  const [copiedField, setCopiedField] = useState<'username' | 'password' | null>(null);
   const [editingPerson, setEditingPerson] = useState<Person | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterJob, setFilterJob] = useState<string>('');
@@ -44,11 +53,64 @@ export function PeopleManagement() {
   const handleCreateOrUpdate = async (data: CreatePersonRequest | UpdatePersonRequest) => {
     if ('id' in data) {
       await updatePerson(data);
+      setIsModalOpen(false);
+      setEditingPerson(null);
     } else {
-      await createPerson(data);
+      const result = await createPerson(data);
+      setIsModalOpen(false);
+      setEditingPerson(null);
+      // Show credentials modal for new servidor
+      setCreatedCredentials({
+        personName: `${result.first_name} ${result.last_name}`,
+        username: result.username,
+        password: result.generated_password,
+      });
+      setIsCredentialsModalOpen(true);
     }
-    setIsModalOpen(false);
-    setEditingPerson(null);
+  };
+
+  const handleResetPassword = async (person: Person) => {
+    if (window.confirm(`¿Resetear la contraseña de ${person.first_name} ${person.last_name}?`)) {
+      try {
+        const newPassword = await resetPassword(person.id);
+        // Close edit modal if open
+        setIsModalOpen(false);
+        setEditingPerson(null);
+        // Show credentials modal
+        setCreatedCredentials({
+          personName: `${person.first_name} ${person.last_name}`,
+          username: person.username || '',
+          password: newPassword,
+        });
+        setIsCredentialsModalOpen(true);
+      } catch (error) {
+        alert(`Error al resetear contraseña: ${error}`);
+      }
+    }
+  };
+
+  const handleCreateUser = async (person: Person) => {
+    try {
+      const result = await createUserAccount(person.id);
+      // Close edit modal if open
+      setIsModalOpen(false);
+      setEditingPerson(null);
+      // Show credentials modal immediately
+      setCreatedCredentials({
+        personName: `${person.first_name} ${person.last_name}`,
+        username: result.username,
+        password: result.password,
+      });
+      setIsCredentialsModalOpen(true);
+    } catch (error) {
+      alert(`Error al crear cuenta de usuario: ${error}`);
+    }
+  };
+
+  const copyToClipboard = async (text: string, field: 'username' | 'password') => {
+    await navigator.clipboard.writeText(text);
+    setCopiedField(field);
+    setTimeout(() => setCopiedField(null), 2000);
   };
 
   const handleEdit = (person: Person) => {
@@ -171,7 +233,7 @@ export function PeopleManagement() {
       await fetchPeople();
       setIsImportModalOpen(false);
       setImportResult(null);
-      alert(`Se importaron ${importResult.success.length} personas exitosamente`);
+      alert(`Se importaron ${importResult.success.length} servidores exitosamente`);
     } catch (error) {
       alert(`Error durante la importación: ${error}`);
     } finally {
@@ -195,8 +257,8 @@ export function PeopleManagement() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Gestión de Personas</h1>
-          <p className="text-gray-500 mt-1">Administrar voluntarios y sus asignaciones</p>
+          <h1 className="text-2xl font-bold text-gray-900">Gestión de Servidores</h1>
+          <p className="text-gray-500 mt-1">Administrar servidores y sus asignaciones</p>
         </div>
         <div className="flex space-x-2">
           <input
@@ -212,7 +274,7 @@ export function PeopleManagement() {
           </Button>
           <Button onClick={() => { setEditingPerson(null); setIsModalOpen(true); }}>
             <Plus className="w-4 h-4 mr-2" />
-            Agregar Persona
+            Agregar Servidor
           </Button>
         </div>
       </div>
@@ -256,17 +318,19 @@ export function PeopleManagement() {
           jobs={jobs}
           onEdit={handleEdit}
           onDelete={handleDelete}
+          onResetPassword={handleResetPassword}
+          onCreateUser={handleCreateUser}
         />
 
         <div className="px-6 py-4 border-t border-gray-200 text-sm text-gray-500">
-          Mostrando {filteredPeople.length} de {people.length} personas
+          Mostrando {filteredPeople.length} de {people.length} servidores
         </div>
       </div>
 
       <Modal
         isOpen={isModalOpen}
         onClose={() => { setIsModalOpen(false); setEditingPerson(null); }}
-        title={editingPerson ? 'Editar Persona' : 'Agregar Persona'}
+        title={editingPerson ? 'Editar Servidor' : 'Agregar Servidor'}
         size="lg"
       >
         <PersonForm
@@ -274,15 +338,95 @@ export function PeopleManagement() {
           jobs={jobs}
           onSubmit={handleCreateOrUpdate}
           onCancel={() => { setIsModalOpen(false); setEditingPerson(null); }}
+          onResetPassword={handleResetPassword}
+          onCreateUser={handleCreateUser}
           isLoading={isLoading}
         />
+      </Modal>
+
+      {/* Credentials Modal - shown after creating or resetting password */}
+      <Modal
+        isOpen={isCredentialsModalOpen}
+        onClose={() => { setIsCredentialsModalOpen(false); setCreatedCredentials(null); }}
+        title="Credenciales del Servidor"
+      >
+        {createdCredentials && (
+          <div className="space-y-4">
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+              <div className="flex items-center mb-2">
+                <Key className="w-5 h-5 text-green-600 mr-2" />
+                <h3 className="font-medium text-green-800">
+                  Credenciales para {createdCredentials.personName}
+                </h3>
+              </div>
+              <p className="text-sm text-green-700 mb-4">
+                Guarde esta información. La contraseña solo se muestra una vez.
+              </p>
+
+              <div className="space-y-3">
+                <div className="bg-white rounded-lg p-3 border border-green-200">
+                  <label className="text-xs text-gray-500 uppercase tracking-wide">Usuario</label>
+                  <div className="flex items-center justify-between mt-1">
+                    <code className="text-lg font-mono font-bold text-gray-900">
+                      {createdCredentials.username}
+                    </code>
+                    <button
+                      onClick={() => copyToClipboard(createdCredentials.username, 'username')}
+                      className="p-2 text-gray-400 hover:text-gray-600 rounded"
+                      title="Copiar"
+                    >
+                      {copiedField === 'username' ? (
+                        <Check className="w-4 h-4 text-green-600" />
+                      ) : (
+                        <Copy className="w-4 h-4" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-lg p-3 border border-green-200">
+                  <label className="text-xs text-gray-500 uppercase tracking-wide">Contraseña</label>
+                  <div className="flex items-center justify-between mt-1">
+                    <code className="text-lg font-mono font-bold text-gray-900">
+                      {createdCredentials.password}
+                    </code>
+                    <button
+                      onClick={() => copyToClipboard(createdCredentials.password, 'password')}
+                      className="p-2 text-gray-400 hover:text-gray-600 rounded"
+                      title="Copiar"
+                    >
+                      {copiedField === 'password' ? (
+                        <Check className="w-4 h-4 text-green-600" />
+                      ) : (
+                        <Copy className="w-4 h-4" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+              <p className="text-sm text-yellow-800">
+                <AlertCircle className="w-4 h-4 inline mr-1" />
+                El servidor puede cambiar su contraseña después de iniciar sesión.
+              </p>
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <Button onClick={() => { setIsCredentialsModalOpen(false); setCreatedCredentials(null); }}>
+                Entendido
+              </Button>
+            </div>
+          </div>
+        )}
       </Modal>
 
       {/* CSV Import Modal */}
       <Modal
         isOpen={isImportModalOpen}
         onClose={() => { setIsImportModalOpen(false); setImportResult(null); }}
-        title="Importar Personas desde CSV"
+        title="Importar Servidores desde CSV"
         size="lg"
       >
         {importResult && (
@@ -293,7 +437,7 @@ export function PeopleManagement() {
                 <div className="flex items-center mb-2">
                   <CheckCircle className="w-5 h-5 text-green-600 mr-2" />
                   <h3 className="font-medium text-green-800">
-                    {importResult.success.length} personas listas para importar
+                    {importResult.success.length} servidores listos para importar
                   </h3>
                 </div>
                 <div className="max-h-40 overflow-y-auto">
@@ -331,7 +475,7 @@ export function PeopleManagement() {
                 <div className="flex items-center">
                   <X className="w-5 h-5 text-red-600 mr-2" />
                   <p className="text-red-800">
-                    Todas las personas en el archivo ya existen en el sistema.
+                    Todos los servidores en el archivo ya existen en el sistema.
                   </p>
                 </div>
               </div>
@@ -363,7 +507,7 @@ export function PeopleManagement() {
                 isLoading={isImporting}
                 disabled={importResult.success.length === 0}
               >
-                Importar {importResult.success.length} Personas
+                Importar {importResult.success.length} Servidores
               </Button>
             </div>
           </div>

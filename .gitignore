@@ -34,9 +34,18 @@ src-tauri/Cargo.lock
 # Environment files
 .env
 .env.*
+!.env.example
+!api/.env.example
 
 # Build outputs
 *.dmg
 *.app
 *.msi
 *.exe
+
+# API
+api/.env
+api/target/
+
+# Deploy scripts
+scripts/.env
