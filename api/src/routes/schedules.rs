@@ -191,7 +191,7 @@ pub async fn generate(
 
     for sd in service_dates {
         let mut assignments = Vec::new();
-        // Track person_id -> job_id for exclusivity checking
+        // Track person_id -> job_name for exclusivity checking
         let mut assigned_this_date: HashMap<String, String> = HashMap::new();
 
         for job in &jobs {
@@ -200,10 +200,10 @@ pub async fn generate(
                     .await
                     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
 
-            // Track who was assigned to this job
+            // Track who was assigned to this job (by name for exclusivity check)
             for assignment in &job_assignments {
                 if let Some(pid) = &assignment.assignment.person_id {
-                    assigned_this_date.insert(pid.clone(), job.id.clone());
+                    assigned_this_date.insert(pid.clone(), job.name.clone());
                 }
             }
 
@@ -248,19 +248,23 @@ fn get_sundays_of_month(year: i32, month: u32) -> Vec<NaiveDate> {
 // ============ Scheduling Algorithm ============
 
 /// Check if two jobs are mutually exclusive (a person can only be assigned to one per date)
-fn are_jobs_exclusive(job1: &str, job2: &str) -> bool {
+/// Note: job_name should be passed in lowercase for comparison
+fn are_jobs_exclusive(job1_name: &str, job2_name: &str) -> bool {
+    let j1 = job1_name.to_lowercase();
+    let j2 = job2_name.to_lowercase();
     let exclusive_pairs = [
-        ("monaguillos", "monaguillos_jr"),
+        ("monaguillos", "monaguillos jr"),
         ("monaguillos", "lectores"),  // Can't be monaguillo and lector same day
     ];
     exclusive_pairs
         .iter()
-        .any(|(a, b)| (job1 == *a && job2 == *b) || (job1 == *b && job2 == *a))
+        .any(|(a, b)| (j1 == *a && j2 == *b) || (j1 == *b && j2 == *a))
 }
 
 /// Check if a job has the consecutive month restriction (monaguillos and lectores only)
-fn has_consecutive_month_restriction(job_id: &str) -> bool {
-    job_id == "monaguillos" || job_id == "lectores"
+fn has_consecutive_month_restriction(job_name: &str) -> bool {
+    let name = job_name.to_lowercase();
+    name == "monaguillos" || name == "lectores"
 }
 
 /// Count Sundays in a given month
@@ -322,9 +326,9 @@ async fn generate_job_assignments(
         .into_iter()
         .filter(|candidate| {
             // Check if this person is already assigned to an exclusive job
-            if let Some(assigned_job_id) = assigned_this_date.get(&candidate.id) {
+            if let Some(assigned_job_name) = assigned_this_date.get(&candidate.id) {
                 // If they're assigned to an exclusive job, exclude them
-                !are_jobs_exclusive(assigned_job_id, &job.id)
+                !are_jobs_exclusive(assigned_job_name, &job.name)
             } else {
                 // Not assigned yet, include them
                 true
@@ -334,7 +338,7 @@ async fn generate_job_assignments(
 
     // Apply consecutive month restriction for monaguillos and lectores
     // Rule: Cannot serve in same role two consecutive months, UNLESS current month has 5 Sundays
-    if has_consecutive_month_restriction(&job.id) {
+    if has_consecutive_month_restriction(&job.name) {
         let current_month = service_date.service_date.month();
         let current_year = service_date.service_date.year();
         let sundays_this_month = count_sundays_in_month(current_year, current_month);
@@ -370,14 +374,14 @@ async fn generate_job_assignments(
 
             tracing::info!(
                 "Consecutive month filter for {}: {} served last month, {} candidates remaining",
-                job.id,
+                job.name,
                 served_last_month.len(),
                 candidates.len()
             );
         } else {
             tracing::info!(
                 "Skipping consecutive month restriction for {} - month has {} Sundays",
-                job.id,
+                job.name,
                 sundays_this_month
             );
         }
