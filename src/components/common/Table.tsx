@@ -106,10 +106,17 @@ export function Table<T>({
           const aVal = getItemValue(a, column);
           const bVal = getItemValue(b, column);
 
-          // Try numeric comparison
+          // Check for ISO date format (yyyy-MM-dd)
+          const isoDateRegex = /^\d{4}-\d{2}-\d{2}$/;
+          if (isoDateRegex.test(aVal) && isoDateRegex.test(bVal)) {
+            const comparison = aVal.localeCompare(bVal);
+            return sort.direction === 'asc' ? comparison : -comparison;
+          }
+
+          // Try numeric comparison (only for pure numbers)
           const aNum = parseFloat(aVal);
           const bNum = parseFloat(bVal);
-          if (!isNaN(aNum) && !isNaN(bNum)) {
+          if (!isNaN(aNum) && !isNaN(bNum) && String(aNum) === aVal && String(bNum) === bVal) {
             return sort.direction === 'asc' ? aNum - bNum : bNum - aNum;
           }
 
