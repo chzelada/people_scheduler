@@ -110,6 +110,7 @@ export function UnavailabilityManagement() {
       render: (record: Unavailability) => (
         <span className="font-medium">{record.person_name || record.person_id}</span>
       ),
+      getValue: (record: Unavailability) => record.person_name || record.person_id,
     },
     {
       key: 'date',
@@ -119,6 +120,7 @@ export function UnavailabilityManagement() {
           {format(parseISO(record.start_date), "EEEE d 'de' MMMM, yyyy", { locale: es })}
         </span>
       ),
+      getValue: (record: Unavailability) => record.start_date,
     },
     {
       key: 'reason',
@@ -126,6 +128,7 @@ export function UnavailabilityManagement() {
       render: (record: Unavailability) => (
         <span className="text-gray-500">{record.reason || '-'}</span>
       ),
+      getValue: (record: Unavailability) => record.reason || '',
     },
     {
       key: 'recurring',
@@ -137,10 +140,13 @@ export function UnavailabilityManagement() {
           {record.recurring ? 'Sí' : 'No'}
         </span>
       ),
+      getValue: (record: Unavailability) => record.recurring ? 'Sí' : 'No',
     },
     {
       key: 'actions',
       header: '',
+      sortable: false,
+      filterable: false,
       render: (record: Unavailability) => (
         <button
           onClick={() => handleDelete(record)}
@@ -179,6 +185,8 @@ export function UnavailabilityManagement() {
           data={unavailability}
           keyExtractor={(record) => record.id}
           emptyMessage="No hay registros de ausencia. Haga clic en 'Agregar Ausencia' para crear uno."
+          enableSorting
+          enableFiltering
         />
       </div>
 

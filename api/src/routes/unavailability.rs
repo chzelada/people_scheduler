@@ -69,14 +69,17 @@ pub async fn get_all(
 pub async fn create(
     State(pool): State<PgPool>,
     Json(input): Json<CreateUnavailability>,
-) -> Result<Json<Unavailability>, (StatusCode, String)> {
+) -> Result<Json<UnavailabilityWithPerson>, (StatusCode, String)> {
     let id = Uuid::new_v4().to_string();
 
-    let unavailability = sqlx::query_as::<_, Unavailability>(
+    // Insert and fetch with person name in one query
+    let row = sqlx::query_as::<_, UnavailabilityRow>(
         r#"
         INSERT INTO unavailability (id, person_id, start_date, end_date, reason, recurring)
         VALUES ($1, $2, $3, $4, $5, $6)
-        RETURNING *
+        RETURNING
+            id, person_id, start_date, end_date, reason, recurring, created_at,
+            (SELECT first_name || ' ' || last_name FROM people WHERE id = $2) as person_name
         "#
     )
     .bind(&id)
@@ -89,7 +92,20 @@ pub async fn create(
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    Ok(Json(unavailability))
+    let result = UnavailabilityWithPerson {
+        unavailability: Unavailability {
+            id: row.id,
+            person_id: row.person_id,
+            start_date: row.start_date,
+            end_date: row.end_date,
+            reason: row.reason,
+            recurring: row.recurring,
+            created_at: row.created_at,
+        },
+        person_name: row.person_name.unwrap_or_default(),
+    };
+
+    Ok(Json(result))
 }
 
 pub async fn delete(
