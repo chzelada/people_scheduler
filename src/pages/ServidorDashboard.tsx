@@ -329,10 +329,10 @@ export function ServidorDashboard() {
           </div>
         )}
 
-        {/* Calendar */}
+        {/* Calendar - Sundays Only */}
         <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-gray-900">Calendario</h3>
+            <h3 className="text-lg font-semibold text-gray-900">Calendario de Domingos</h3>
             <div className="flex items-center space-x-2">
               <button
                 onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
@@ -340,7 +340,7 @@ export function ServidorDashboard() {
               >
                 <ChevronLeft className="w-5 h-5 text-gray-600" />
               </button>
-              <span className="text-sm font-medium text-gray-700 min-w-[120px] text-center">
+              <span className="text-sm font-medium text-gray-700 min-w-[120px] text-center capitalize">
                 {format(currentMonth, 'MMMM yyyy', { locale: es })}
               </span>
               <button
@@ -353,56 +353,86 @@ export function ServidorDashboard() {
           </div>
 
           <div className="p-4">
-            {/* Days of week header */}
-            <div className="grid grid-cols-7 gap-1 mb-2">
-              {daysOfWeek.map((day) => (
-                <div key={day} className="text-center text-xs font-medium text-gray-500 py-2">
-                  {day}
-                </div>
-              ))}
-            </div>
-
-            {/* Calendar days */}
-            <div className="grid grid-cols-7 gap-1">
-              {calendarDays.map((day, index) => {
+            {/* Sundays only - horizontal scroll */}
+            <div className="flex gap-3 overflow-x-auto pb-2">
+              {calendarDays.filter(day => isSunday(day) && isSameMonth(day, currentMonth)).map((day, index) => {
                 const assignment = getAssignmentForDate(day);
                 const unavailability = getUnavailabilityForDate(day);
-                const isCurrentMonth = isSameMonth(day, currentMonth);
                 const isTodayDate = isToday(day);
-                const isSundayDay = isSunday(day);
-                const isFutureSunday = isSundayDay && day >= today;
+                const isFutureSunday = day >= today;
 
                 return (
                   <div
                     key={index}
-                    onClick={() => isFutureSunday && isCurrentMonth && handleSundayClick(day)}
-                    className={`relative aspect-square p-1 rounded-lg transition-colors ${
-                      !isCurrentMonth ? 'opacity-30' : ''
-                    } ${isTodayDate ? 'ring-2 ring-blue-500 ring-offset-1' : ''} ${
-                      isFutureSunday && isCurrentMonth ? 'cursor-pointer hover:bg-blue-50' : ''
-                    } ${unavailability ? 'bg-red-50' : ''}`}
+                    onClick={() => isFutureSunday && handleSundayClick(day)}
+                    className={`flex-shrink-0 w-32 rounded-xl border-2 transition-all ${
+                      isTodayDate ? 'ring-2 ring-blue-500 ring-offset-2' : ''
+                    } ${isFutureSunday ? 'cursor-pointer hover:shadow-md' : 'opacity-60'} ${
+                      unavailability
+                        ? 'border-red-300 bg-red-50'
+                        : assignment
+                          ? 'border-transparent'
+                          : 'border-gray-200 bg-gray-50'
+                    }`}
+                    style={assignment && !unavailability ? {
+                      borderColor: assignment.job_color,
+                      backgroundColor: `${assignment.job_color}10`
+                    } : {}}
                   >
-                    <div className={`text-center text-sm ${
-                      isTodayDate ? 'font-bold text-blue-600' : unavailability ? 'text-red-600' : 'text-gray-700'
-                    }`}>
-                      {format(day, 'd')}
+                    {/* Date header */}
+                    <div className={`px-3 py-2 text-center border-b ${
+                      unavailability
+                        ? 'border-red-200 bg-red-100'
+                        : assignment
+                          ? 'border-opacity-30'
+                          : 'border-gray-200 bg-gray-100'
+                    }`}
+                    style={assignment && !unavailability ? {
+                      borderColor: `${assignment.job_color}40`,
+                      backgroundColor: `${assignment.job_color}20`
+                    } : {}}>
+                      <div className={`text-2xl font-bold ${
+                        isTodayDate ? 'text-blue-600' : unavailability ? 'text-red-600' : 'text-gray-900'
+                      }`}>
+                        {format(day, 'd')}
+                      </div>
+                      <div className="text-xs text-gray-500 capitalize">
+                        {format(day, 'MMM', { locale: es })}
+                      </div>
                     </div>
-                    {unavailability && (
-                      <div
-                        className="absolute bottom-1 left-1 right-1 h-1.5 rounded-full bg-red-400"
-                        title={`No disponible: ${unavailability.reason || 'Sin motivo'}`}
-                      />
-                    )}
-                    {assignment && !unavailability && (
-                      <div
-                        className="absolute bottom-1 left-1 right-1 h-1.5 rounded-full"
-                        style={{ backgroundColor: assignment.job_color }}
-                        title={assignment.job_name}
-                      />
-                    )}
-                    {isFutureSunday && isCurrentMonth && !unavailability && !assignment && (
-                      <div className="absolute bottom-1 left-1 right-1 h-1.5 rounded-full bg-gray-200" />
-                    )}
+
+                    {/* Content */}
+                    <div className="px-3 py-3 min-h-[80px] flex flex-col justify-center">
+                      {unavailability ? (
+                        <div className="text-center">
+                          <div className="text-red-600 font-medium text-sm">No disponible</div>
+                          {unavailability.reason && (
+                            <div className="text-red-400 text-xs mt-1 truncate">{unavailability.reason}</div>
+                          )}
+                        </div>
+                      ) : assignment ? (
+                        <div className="text-center">
+                          <div
+                            className="font-semibold text-sm"
+                            style={{ color: assignment.job_color }}
+                          >
+                            {assignment.job_name}
+                          </div>
+                          {assignment.position_name && (
+                            <div className="text-gray-600 text-xs mt-1">
+                              {assignment.position_name}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="text-center">
+                          <div className="text-gray-400 font-medium text-sm">Libre</div>
+                          {isFutureSunday && (
+                            <div className="text-gray-300 text-xs mt-1">Click para ausencia</div>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 );
               })}
@@ -424,6 +454,10 @@ export function ServidorDashboard() {
                   </div>
                 );
               })}
+              <div className="flex items-center">
+                <span className="w-3 h-3 rounded-full mr-2 bg-gray-300" />
+                <span className="text-gray-600">Libre</span>
+              </div>
               <div className="flex items-center">
                 <span className="w-3 h-3 rounded-full mr-2 bg-red-400" />
                 <span className="text-gray-600">No disponible</span>

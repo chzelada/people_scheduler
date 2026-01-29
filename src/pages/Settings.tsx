@@ -140,9 +140,9 @@ export function Settings() {
       <div className="bg-white rounded-lg shadow p-6">
         <h2 className="text-lg font-medium text-gray-900 mb-4">Acerca de</h2>
         <div className="space-y-2 text-sm text-gray-600">
-          <p><strong>Programador de Voluntarios</strong></p>
+          <p><strong>Programación de Servicio Misa de Niños</strong></p>
           <p>Versión 0.1.0</p>
-          <p>Una aplicación de programación de voluntarios para iglesias con algoritmos de distribución equitativa.</p>
+          <p>Una aplicación de programación de servidores con algoritmos de distribución equitativa.</p>
           <p className="mt-4">
             Los datos se almacenan en la nube usando PostgreSQL.
           </p>

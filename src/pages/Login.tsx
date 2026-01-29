@@ -21,8 +21,8 @@ export function Login() {
           <div className="mx-auto h-12 w-12 flex items-center justify-center rounded-full bg-primary-100">
             <Lock className="h-6 w-6 text-primary-600" />
           </div>
-          <h2 className="mt-6 text-3xl font-bold text-gray-900">
-            Programador de Voluntarios
+          <h2 className="mt-6 text-2xl font-bold text-gray-900">
+            Programación de Servicio Misa de Niños
           </h2>
           <p className="mt-2 text-sm text-gray-600">
             Inicie sesión para continuar
