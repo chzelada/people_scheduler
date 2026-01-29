@@ -1,11 +1,41 @@
 import React, { useEffect, useState } from 'react';
-import { Plus, Download, Send, Trash2, AlertCircle } from 'lucide-react';
+import { Plus, Download, Send, Trash2, AlertCircle, XCircle, CheckCircle } from 'lucide-react';
 import { Button, Modal } from '../components/common';
 import { ScheduleCalendar, ScheduleGenerator, ConflictList, EditAssignmentModal } from '../components/schedule';
 import { useScheduleStore } from '../stores/scheduleStore';
 import { useJobsStore } from '../stores/jobsStore';
 import { scheduleApi } from '../services/api';
 import type { GenerateScheduleRequest, Assignment, EmptySlot } from '../types';
+
+// Toast notification component
+function Toast({ message, type, onClose }: { message: string; type: 'success' | 'error'; onClose: () => void }) {
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      onClose();
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [onClose]);
+
+  return (
+    <div className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none">
+      <div className={`
+        pointer-events-auto px-6 py-4 rounded-lg shadow-lg flex items-center space-x-3
+        transform transition-all duration-300 animate-fade-in
+        ${type === 'error'
+          ? 'bg-red-600 text-white'
+          : 'bg-green-600 text-white'
+        }
+      `}>
+        {type === 'error' ? (
+          <XCircle className="w-6 h-6 flex-shrink-0" />
+        ) : (
+          <CheckCircle className="w-6 h-6 flex-shrink-0" />
+        )}
+        <span className="text-sm font-medium">{message}</span>
+      </div>
+    </div>
+  );
+}
 
 const statusLabels: Record<string, string> = {
   PUBLISHED: 'PUBLICADO',
@@ -60,7 +90,7 @@ export function ScheduleView() {
 
   const showMessage = (type: 'success' | 'error', text: string) => {
     setStatusMessage({ type, text });
-    setTimeout(() => setStatusMessage(null), 5000);
+    // Toast component handles auto-dismiss after 2 seconds
   };
 
   const handleGenerate = async (request: GenerateScheduleRequest) => {
@@ -275,15 +305,13 @@ export function ScheduleView() {
 
   return (
     <div className="space-y-6">
-      {/* Status Message */}
+      {/* Toast Notification */}
       {statusMessage && (
-        <div className={`p-4 rounded-lg ${
-          statusMessage.type === 'success'
-            ? 'bg-green-50 border border-green-200 text-green-800'
-            : 'bg-red-50 border border-red-200 text-red-800'
-        }`}>
-          {statusMessage.text}
-        </div>
+        <Toast
+          message={statusMessage.text}
+          type={statusMessage.type}
+          onClose={() => setStatusMessage(null)}
+        />
       )}
 
       <div className="flex items-center justify-between">
