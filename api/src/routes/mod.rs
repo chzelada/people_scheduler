@@ -43,6 +43,10 @@ pub fn create_router(pool: PgPool) -> Router {
         .route("/schedules/{id}/publish", post(schedules::publish))
         .route("/schedules/{id}/export", get(schedules::export_excel))
         .route("/assignments/{id}", put(schedules::update_assignment))
+        .route("/assignments/{id}/clear", put(schedules::clear_assignment))
+        .route("/assignments/{id}/move", put(schedules::move_assignment))
+        .route("/assignments/swap", post(schedules::swap_assignments))
+        .route("/schedules/{id}/completeness", get(schedules::get_schedule_completeness))
         .route("/my-assignments/{person_id}", get(schedules::get_my_assignments))
 
         // Unavailability routes (admin)

@@ -50,14 +50,14 @@ export function EditAssignmentModal({
       const people = await scheduleApi.getEligiblePeopleForAssignment({
         job_id: assignment.job_id,
         service_date: serviceDate,
-        current_person_id: assignment.person_id,
+        current_person_id: assignment.person_id || undefined,
       });
 
       // Get person IDs already assigned in this schedule (excluding the current assignment being edited)
       const alreadyAssignedInSchedule = new Set(
         currentScheduleAssignments
-          .filter((a) => a.id !== assignment.id)
-          .map((a) => a.person_id)
+          .filter((a) => a.id !== assignment.id && a.person_id)
+          .map((a) => a.person_id!)
       );
 
       // Mark people who are already assigned elsewhere in this schedule

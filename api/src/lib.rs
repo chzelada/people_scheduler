@@ -24,6 +24,29 @@ pub async fn init_database(pool: &PgPool) -> Result<(), Box<dyn std::error::Erro
         .await
         .ok(); // Ignore errors if already exists
 
+    sqlx::query(include_str!("../../migrations-postgres/005_add_monaguillos_jr.sql"))
+        .execute(pool)
+        .await
+        .ok(); // Ignore errors if already exists
+
+    // Migration 006: Make person_id nullable for drag-and-drop editing
+    // Run each statement separately since complex SQL doesn't work well as single query
+    match sqlx::query("ALTER TABLE assignments ALTER COLUMN person_id DROP NOT NULL")
+        .execute(pool)
+        .await
+    {
+        Ok(_) => tracing::info!("Migration 006a: person_id now nullable"),
+        Err(e) => tracing::warn!("Migration 006a: {}", e),
+    }
+
+    match sqlx::query("ALTER TABLE assignments DROP CONSTRAINT IF EXISTS assignments_service_date_id_job_id_person_id_key")
+        .execute(pool)
+        .await
+    {
+        Ok(_) => tracing::info!("Migration 006b: old constraint dropped"),
+        Err(e) => tracing::warn!("Migration 006b: {}", e),
+    }
+
     // Initialize admin user if not exists
     auth::init_admin_user(pool).await?;
 

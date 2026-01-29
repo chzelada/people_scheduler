@@ -106,7 +106,7 @@ export interface Assignment {
   id: string;
   service_date_id: string;
   job_id: string;
-  person_id: string;
+  person_id: string | null;
   position: number;
   manual_override: boolean;
   created_at?: string;
@@ -114,6 +114,31 @@ export interface Assignment {
   person_name?: string;
   job_name?: string;
   position_name?: string;
+}
+
+// Drag and Drop types
+export interface SwapAssignmentsRequest {
+  assignment_id_1: string;
+  assignment_id_2: string;
+}
+
+export interface MoveAssignmentRequest {
+  target_service_date_id: string;
+  target_job_id: string;
+  target_position: number;
+}
+
+export interface EmptySlot {
+  service_date: string;
+  job_name: string;
+  position_name?: string;
+}
+
+export interface CompletenessResponse {
+  is_complete: boolean;
+  total_slots: number;
+  filled_slots: number;
+  empty_slots: EmptySlot[];
 }
 
 export interface GenerateScheduleRequest {

@@ -11,11 +11,14 @@
     "tauri": "tauri"
   },
   "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/utilities": "^3.2.2",
     "@tanstack/react-query": "^5.90.20",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-opener": "^2",
     "date-fns": "^4.1.0",
     "lucide-react": "^0.563.0",
+    "pg": "^8.17.2",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "zustand": "^5.0.10"

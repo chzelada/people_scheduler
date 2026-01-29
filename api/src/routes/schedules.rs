@@ -36,11 +36,11 @@ struct AssignmentRow {
     id: String,
     service_date_id: String,
     job_id: String,
-    person_id: String,
+    person_id: Option<String>,
     position: Option<i32>,
     position_name: Option<String>,
     manual_override: Option<bool>,
-    person_name: String,
+    person_name: Option<String>,
     job_name: String,
 }
 
@@ -75,7 +75,7 @@ pub async fn get_by_id(
                 p.first_name || ' ' || p.last_name as person_name,
                 j.name as job_name
             FROM assignments a
-            JOIN people p ON a.person_id = p.id
+            LEFT JOIN people p ON a.person_id = p.id
             JOIN jobs j ON a.job_id = j.id
             WHERE a.service_date_id = $1
             ORDER BY j.name, a.position
@@ -100,7 +100,7 @@ pub async fn get_by_id(
                     created_at: None,
                     updated_at: None,
                 },
-                person_name: row.person_name,
+                person_name: row.person_name.unwrap_or_default(),
                 job_name: row.job_name,
             })
             .collect();
@@ -195,6 +195,8 @@ pub async fn generate(
 
     for sd in service_dates {
         let mut assignments = Vec::new();
+        // Track person_id -> job_id for exclusivity checking
+        let mut assigned_this_date: HashMap<String, String> = HashMap::new();
 
         for job in &jobs {
             let job_assignments = generate_job_assignments(
@@ -202,7 +204,18 @@ pub async fn generate(
                 &sd,
                 job,
                 year,
+                &assigned_this_date,
             ).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+
+            // Track who was assigned to this job
+            for assignment in &job_assignments {
+                if let Some(pid) = &assignment.assignment.person_id {
+                    assigned_this_date.insert(
+                        pid.clone(),
+                        job.id.clone(),
+                    );
+                }
+            }
 
             assignments.extend(job_assignments);
         }
@@ -242,6 +255,16 @@ fn get_sundays_of_month(year: i32, month: u32) -> Vec<NaiveDate> {
 
 // ============ Scheduling Algorithm ============
 
+/// Check if two jobs are mutually exclusive (a person can only be assigned to one per date)
+fn are_jobs_exclusive(job1: &str, job2: &str) -> bool {
+    let exclusive_pairs = [
+        ("monaguillos", "monaguillos_jr"),
+    ];
+    exclusive_pairs.iter().any(|(a, b)|
+        (job1 == *a && job2 == *b) || (job1 == *b && job2 == *a)
+    )
+}
+
 #[derive(FromRow, Clone)]
 struct CandidatePerson {
     id: String,
@@ -266,11 +289,12 @@ async fn generate_job_assignments(
     service_date: &ServiceDate,
     job: &Job,
     year: i32,
+    assigned_this_date: &HashMap<String, String>,
 ) -> Result<Vec<AssignmentWithDetails>, String> {
     let num_positions = job.people_required as i32;
 
     // Get candidates: active people qualified for this job and available on this date
-    let candidates = sqlx::query_as::<_, CandidatePerson>(
+    let all_candidates = sqlx::query_as::<_, CandidatePerson>(
         r#"
         SELECT DISTINCT p.id, p.first_name, p.last_name
         FROM people p
@@ -289,6 +313,21 @@ async fn generate_job_assignments(
     .fetch_all(pool)
     .await
     .map_err(|e| e.to_string())?;
+
+    // Filter out candidates already assigned to an exclusive job
+    let candidates: Vec<CandidatePerson> = all_candidates
+        .into_iter()
+        .filter(|candidate| {
+            // Check if this person is already assigned to an exclusive job
+            if let Some(assigned_job_id) = assigned_this_date.get(&candidate.id) {
+                // If they're assigned to an exclusive job, exclude them
+                !are_jobs_exclusive(assigned_job_id, &job.id)
+            } else {
+                // Not assigned yet, include them
+                true
+            }
+        })
+        .collect();
 
     if candidates.is_empty() {
         return Ok(Vec::new());
@@ -449,7 +488,7 @@ async fn generate_job_assignments(
                     id: assignment_id,
                     service_date_id: service_date.id.clone(),
                     job_id: job.id.clone(),
-                    person_id: person_id.clone(),
+                    person_id: Some(person_id.clone()),
                     position: Some(pos),
                     position_name: position_name.clone(),
                     manual_override: Some(false),
@@ -560,20 +599,23 @@ pub async fn update_assignment(
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    // Update assignment history - remove old, add new
-    sqlx::query(
-        r#"
-        DELETE FROM assignment_history
-        WHERE person_id = $1 AND job_id = $2 AND service_date = $3
-        "#
-    )
-    .bind(&current.person_id)
-    .bind(&current.job_id)
-    .bind(&sd.service_date)
-    .execute(&pool)
-    .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    // Update assignment history - remove old entry if there was a person
+    if let Some(old_person_id) = &current.person_id {
+        sqlx::query(
+            r#"
+            DELETE FROM assignment_history
+            WHERE person_id = $1 AND job_id = $2 AND service_date = $3
+            "#
+        )
+        .bind(old_person_id)
+        .bind(&current.job_id)
+        .bind(&sd.service_date)
+        .execute(&pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    }
 
+    // Add new history entry
     let history_id = Uuid::new_v4().to_string();
     let year = sd.service_date.year();
     let week_number = sd.service_date.iso_week().week() as i32;
@@ -603,7 +645,7 @@ pub async fn update_assignment(
             p.first_name || ' ' || p.last_name as person_name,
             j.name as job_name
         FROM assignments a
-        JOIN people p ON a.person_id = p.id
+        LEFT JOIN people p ON a.person_id = p.id
         JOIN jobs j ON a.job_id = j.id
         WHERE a.id = $1
         "#
@@ -625,7 +667,7 @@ pub async fn update_assignment(
             created_at: None,
             updated_at: None,
         },
-        person_name: row.person_name,
+        person_name: row.person_name.unwrap_or_default(),
         job_name: row.job_name,
     }))
 }
@@ -698,4 +740,527 @@ pub async fn get_my_assignments(
         .collect();
 
     Ok(Json(assignments))
+}
+
+// ============ Clear Assignment (remove person from slot) ============
+
+pub async fn clear_assignment(
+    State(pool): State<PgPool>,
+    Path(id): Path<String>,
+) -> Result<Json<AssignmentWithDetails>, (StatusCode, String)> {
+    // Get current assignment
+    let current = sqlx::query_as::<_, Assignment>(
+        "SELECT * FROM assignments WHERE id = $1"
+    )
+    .bind(&id)
+    .fetch_optional(&pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+    .ok_or((StatusCode::NOT_FOUND, "Assignment not found".to_string()))?;
+
+    // Get service date for history update
+    let sd = sqlx::query_as::<_, ServiceDate>(
+        "SELECT * FROM service_dates WHERE id = $1"
+    )
+    .bind(&current.service_date_id)
+    .fetch_one(&pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    // Clear the person_id (set to NULL)
+    sqlx::query(
+        "UPDATE assignments SET person_id = NULL, manual_override = true WHERE id = $1"
+    )
+    .bind(&id)
+    .execute(&pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    // Remove from assignment history if there was a person
+    if let Some(old_person_id) = &current.person_id {
+        sqlx::query(
+            r#"
+            DELETE FROM assignment_history
+            WHERE person_id = $1 AND job_id = $2 AND service_date = $3
+            "#
+        )
+        .bind(old_person_id)
+        .bind(&current.job_id)
+        .bind(&sd.service_date)
+        .execute(&pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    }
+
+    // Return updated assignment with details
+    let row = sqlx::query_as::<_, AssignmentRow>(
+        r#"
+        SELECT
+            a.id, a.service_date_id, a.job_id, a.person_id, a.position, a.position_name, a.manual_override,
+            p.first_name || ' ' || p.last_name as person_name,
+            j.name as job_name
+        FROM assignments a
+        LEFT JOIN people p ON a.person_id = p.id
+        JOIN jobs j ON a.job_id = j.id
+        WHERE a.id = $1
+        "#
+    )
+    .bind(&id)
+    .fetch_one(&pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(Json(AssignmentWithDetails {
+        assignment: Assignment {
+            id: row.id,
+            service_date_id: row.service_date_id,
+            job_id: row.job_id,
+            person_id: row.person_id,
+            position: row.position,
+            position_name: row.position_name,
+            manual_override: row.manual_override,
+            created_at: None,
+            updated_at: None,
+        },
+        person_name: row.person_name.unwrap_or_default(),
+        job_name: row.job_name,
+    }))
+}
+
+// ============ Swap Assignments ============
+
+#[derive(Debug, serde::Deserialize)]
+pub struct SwapAssignmentsRequest {
+    pub assignment_id_1: String,
+    pub assignment_id_2: String,
+}
+
+pub async fn swap_assignments(
+    State(pool): State<PgPool>,
+    Json(input): Json<SwapAssignmentsRequest>,
+) -> Result<Json<Vec<AssignmentWithDetails>>, (StatusCode, String)> {
+    // Get both assignments
+    let assignment1 = sqlx::query_as::<_, Assignment>(
+        "SELECT * FROM assignments WHERE id = $1"
+    )
+    .bind(&input.assignment_id_1)
+    .fetch_optional(&pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+    .ok_or((StatusCode::NOT_FOUND, "Assignment 1 not found".to_string()))?;
+
+    let assignment2 = sqlx::query_as::<_, Assignment>(
+        "SELECT * FROM assignments WHERE id = $1"
+    )
+    .bind(&input.assignment_id_2)
+    .fetch_optional(&pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+    .ok_or((StatusCode::NOT_FOUND, "Assignment 2 not found".to_string()))?;
+
+    // Get service dates for history updates
+    let sd1 = sqlx::query_as::<_, ServiceDate>(
+        "SELECT * FROM service_dates WHERE id = $1"
+    )
+    .bind(&assignment1.service_date_id)
+    .fetch_one(&pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let sd2 = sqlx::query_as::<_, ServiceDate>(
+        "SELECT * FROM service_dates WHERE id = $1"
+    )
+    .bind(&assignment2.service_date_id)
+    .fetch_one(&pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    // Swap person_ids
+    let person1 = assignment1.person_id.clone();
+    let person2 = assignment2.person_id.clone();
+
+    // To avoid unique constraint violation, we need to use NULL as intermediate step:
+    // 1. Set assignment 1 to NULL
+    // 2. Set assignment 2 to person1
+    // 3. Set assignment 1 to person2
+
+    // Step 1: Clear assignment 1
+    sqlx::query(
+        "UPDATE assignments SET person_id = NULL, manual_override = true WHERE id = $1"
+    )
+    .bind(&input.assignment_id_1)
+    .execute(&pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    // Step 2: Update assignment 2 with person 1
+    sqlx::query(
+        "UPDATE assignments SET person_id = $1, manual_override = true WHERE id = $2"
+    )
+    .bind(&person1)
+    .bind(&input.assignment_id_2)
+    .execute(&pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    // Step 3: Update assignment 1 with person 2
+    sqlx::query(
+        "UPDATE assignments SET person_id = $1, manual_override = true WHERE id = $2"
+    )
+    .bind(&person2)
+    .bind(&input.assignment_id_1)
+    .execute(&pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    // Update assignment history for person 1
+    if let Some(p1) = &person1 {
+        // Remove old history entry for person 1 at slot 1
+        sqlx::query(
+            "DELETE FROM assignment_history WHERE person_id = $1 AND job_id = $2 AND service_date = $3"
+        )
+        .bind(p1)
+        .bind(&assignment1.job_id)
+        .bind(&sd1.service_date)
+        .execute(&pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+        // Add new history entry for person 1 at slot 2
+        let history_id = Uuid::new_v4().to_string();
+        let year = sd2.service_date.year();
+        let week_number = sd2.service_date.iso_week().week() as i32;
+        sqlx::query(
+            r#"
+            INSERT INTO assignment_history (id, person_id, job_id, service_date, year, week_number, position)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            "#
+        )
+        .bind(&history_id)
+        .bind(p1)
+        .bind(&assignment2.job_id)
+        .bind(&sd2.service_date)
+        .bind(year)
+        .bind(week_number)
+        .bind(assignment2.position)
+        .execute(&pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    }
+
+    // Update assignment history for person 2
+    if let Some(p2) = &person2 {
+        // Remove old history entry for person 2 at slot 2
+        sqlx::query(
+            "DELETE FROM assignment_history WHERE person_id = $1 AND job_id = $2 AND service_date = $3"
+        )
+        .bind(p2)
+        .bind(&assignment2.job_id)
+        .bind(&sd2.service_date)
+        .execute(&pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+        // Add new history entry for person 2 at slot 1
+        let history_id = Uuid::new_v4().to_string();
+        let year = sd1.service_date.year();
+        let week_number = sd1.service_date.iso_week().week() as i32;
+        sqlx::query(
+            r#"
+            INSERT INTO assignment_history (id, person_id, job_id, service_date, year, week_number, position)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            "#
+        )
+        .bind(&history_id)
+        .bind(p2)
+        .bind(&assignment1.job_id)
+        .bind(&sd1.service_date)
+        .bind(year)
+        .bind(week_number)
+        .bind(assignment1.position)
+        .execute(&pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    }
+
+    // Return both updated assignments
+    let mut results = Vec::new();
+
+    for id in [&input.assignment_id_1, &input.assignment_id_2] {
+        let row = sqlx::query_as::<_, AssignmentRow>(
+            r#"
+            SELECT
+                a.id, a.service_date_id, a.job_id, a.person_id, a.position, a.position_name, a.manual_override,
+                p.first_name || ' ' || p.last_name as person_name,
+                j.name as job_name
+            FROM assignments a
+            LEFT JOIN people p ON a.person_id = p.id
+            JOIN jobs j ON a.job_id = j.id
+            WHERE a.id = $1
+            "#
+        )
+        .bind(id)
+        .fetch_one(&pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+        results.push(AssignmentWithDetails {
+            assignment: Assignment {
+                id: row.id,
+                service_date_id: row.service_date_id,
+                job_id: row.job_id,
+                person_id: row.person_id,
+                position: row.position,
+                position_name: row.position_name,
+                manual_override: row.manual_override,
+                created_at: None,
+                updated_at: None,
+            },
+            person_name: row.person_name.unwrap_or_default(),
+            job_name: row.job_name,
+        });
+    }
+
+    Ok(Json(results))
+}
+
+// ============ Move Assignment ============
+
+#[derive(Debug, serde::Deserialize)]
+pub struct MoveAssignmentRequest {
+    pub target_service_date_id: String,
+    pub target_job_id: String,
+    pub target_position: i32,
+}
+
+pub async fn move_assignment(
+    State(pool): State<PgPool>,
+    Path(id): Path<String>,
+    Json(input): Json<MoveAssignmentRequest>,
+) -> Result<Json<Vec<AssignmentWithDetails>>, (StatusCode, String)> {
+    // Get source assignment
+    let source = sqlx::query_as::<_, Assignment>(
+        "SELECT * FROM assignments WHERE id = $1"
+    )
+    .bind(&id)
+    .fetch_optional(&pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+    .ok_or((StatusCode::NOT_FOUND, "Assignment not found".to_string()))?;
+
+    // Check if target slot exists
+    let target = sqlx::query_as::<_, Assignment>(
+        "SELECT * FROM assignments WHERE service_date_id = $1 AND job_id = $2 AND position = $3"
+    )
+    .bind(&input.target_service_date_id)
+    .bind(&input.target_job_id)
+    .bind(input.target_position)
+    .fetch_optional(&pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    if let Some(target_assignment) = target {
+        // Target slot exists - if it has a person, swap; if empty, move
+        if target_assignment.person_id.is_some() {
+            // Swap
+            return swap_assignments(
+                State(pool),
+                Json(SwapAssignmentsRequest {
+                    assignment_id_1: id,
+                    assignment_id_2: target_assignment.id,
+                }),
+            ).await;
+        } else {
+            // Target is empty - move source person to target, clear source
+            let source_sd = sqlx::query_as::<_, ServiceDate>(
+                "SELECT * FROM service_dates WHERE id = $1"
+            )
+            .bind(&source.service_date_id)
+            .fetch_one(&pool)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+            let target_sd = sqlx::query_as::<_, ServiceDate>(
+                "SELECT * FROM service_dates WHERE id = $1"
+            )
+            .bind(&input.target_service_date_id)
+            .fetch_one(&pool)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+            // Move person to target
+            sqlx::query(
+                "UPDATE assignments SET person_id = $1, manual_override = true WHERE id = $2"
+            )
+            .bind(&source.person_id)
+            .bind(&target_assignment.id)
+            .execute(&pool)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+            // Clear source
+            sqlx::query(
+                "UPDATE assignments SET person_id = NULL, manual_override = true WHERE id = $1"
+            )
+            .bind(&id)
+            .execute(&pool)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+            // Update history
+            if let Some(person_id) = &source.person_id {
+                // Remove old history
+                sqlx::query(
+                    "DELETE FROM assignment_history WHERE person_id = $1 AND job_id = $2 AND service_date = $3"
+                )
+                .bind(person_id)
+                .bind(&source.job_id)
+                .bind(&source_sd.service_date)
+                .execute(&pool)
+                .await
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+                // Add new history at target
+                let history_id = Uuid::new_v4().to_string();
+                let year = target_sd.service_date.year();
+                let week_number = target_sd.service_date.iso_week().week() as i32;
+                sqlx::query(
+                    r#"
+                    INSERT INTO assignment_history (id, person_id, job_id, service_date, year, week_number, position)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7)
+                    "#
+                )
+                .bind(&history_id)
+                .bind(person_id)
+                .bind(&input.target_job_id)
+                .bind(&target_sd.service_date)
+                .bind(year)
+                .bind(week_number)
+                .bind(input.target_position)
+                .execute(&pool)
+                .await
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            }
+
+            // Return both updated assignments
+            let mut results = Vec::new();
+            for aid in [&id, &target_assignment.id] {
+                let row = sqlx::query_as::<_, AssignmentRow>(
+                    r#"
+                    SELECT
+                        a.id, a.service_date_id, a.job_id, a.person_id, a.position, a.position_name, a.manual_override,
+                        p.first_name || ' ' || p.last_name as person_name,
+                        j.name as job_name
+                    FROM assignments a
+                    LEFT JOIN people p ON a.person_id = p.id
+                    JOIN jobs j ON a.job_id = j.id
+                    WHERE a.id = $1
+                    "#
+                )
+                .bind(aid)
+                .fetch_one(&pool)
+                .await
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+                results.push(AssignmentWithDetails {
+                    assignment: Assignment {
+                        id: row.id,
+                        service_date_id: row.service_date_id,
+                        job_id: row.job_id,
+                        person_id: row.person_id,
+                        position: row.position,
+                        position_name: row.position_name,
+                        manual_override: row.manual_override,
+                        created_at: None,
+                        updated_at: None,
+                    },
+                    person_name: row.person_name.unwrap_or_default(),
+                    job_name: row.job_name,
+                });
+            }
+            return Ok(Json(results));
+        }
+    }
+
+    // Target slot doesn't exist - this shouldn't happen in normal flow
+    Err((StatusCode::NOT_FOUND, "Target slot not found".to_string()))
+}
+
+// ============ Get Schedule Completeness ============
+
+#[derive(Debug, serde::Serialize)]
+pub struct EmptySlot {
+    pub service_date: String,
+    pub job_name: String,
+    pub position_name: Option<String>,
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct CompletenessResponse {
+    pub is_complete: bool,
+    pub total_slots: i64,
+    pub filled_slots: i64,
+    pub empty_slots: Vec<EmptySlot>,
+}
+
+pub async fn get_schedule_completeness(
+    State(pool): State<PgPool>,
+    Path(id): Path<String>,
+) -> Result<Json<CompletenessResponse>, (StatusCode, String)> {
+    // Count total and filled slots
+    let total_slots: i64 = sqlx::query_scalar(
+        r#"
+        SELECT COUNT(*) FROM assignments a
+        JOIN service_dates sd ON a.service_date_id = sd.id
+        WHERE sd.schedule_id = $1
+        "#
+    )
+    .bind(&id)
+    .fetch_one(&pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let filled_slots: i64 = sqlx::query_scalar(
+        r#"
+        SELECT COUNT(*) FROM assignments a
+        JOIN service_dates sd ON a.service_date_id = sd.id
+        WHERE sd.schedule_id = $1 AND a.person_id IS NOT NULL
+        "#
+    )
+    .bind(&id)
+    .fetch_one(&pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    // Get empty slots details
+    let empty_rows: Vec<(NaiveDate, String, Option<String>)> = sqlx::query_as(
+        r#"
+        SELECT sd.service_date, j.name as job_name, a.position_name
+        FROM assignments a
+        JOIN service_dates sd ON a.service_date_id = sd.id
+        JOIN jobs j ON a.job_id = j.id
+        WHERE sd.schedule_id = $1 AND a.person_id IS NULL
+        ORDER BY sd.service_date, j.name, a.position
+        "#
+    )
+    .bind(&id)
+    .fetch_all(&pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let empty_slots: Vec<EmptySlot> = empty_rows
+        .into_iter()
+        .map(|(service_date, job_name, position_name)| EmptySlot {
+            service_date: service_date.to_string(),
+            job_name,
+            position_name,
+        })
+        .collect();
+
+    Ok(Json(CompletenessResponse {
+        is_complete: filled_slots == total_slots,
+        total_slots,
+        filled_slots,
+        empty_slots,
+    }))
 }

@@ -180,7 +180,7 @@ pub struct Assignment {
     pub id: String,
     pub service_date_id: String,
     pub job_id: String,
-    pub person_id: String,
+    pub person_id: Option<String>,
     pub position: Option<i32>,
     pub position_name: Option<String>,
     pub manual_override: Option<bool>,

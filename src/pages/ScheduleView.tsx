@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { Plus, Download, Send, Trash2 } from 'lucide-react';
+import { Plus, Download, Send, Trash2, AlertCircle } from 'lucide-react';
 import { Button, Modal } from '../components/common';
 import { ScheduleCalendar, ScheduleGenerator, ConflictList, EditAssignmentModal } from '../components/schedule';
 import { useScheduleStore } from '../stores/scheduleStore';
 import { useJobsStore } from '../stores/jobsStore';
 import { scheduleApi } from '../services/api';
-import type { GenerateScheduleRequest, Assignment } from '../types';
+import type { GenerateScheduleRequest, Assignment, EmptySlot } from '../types';
 
 const statusLabels: Record<string, string> = {
   PUBLISHED: 'PUBLICADO',
@@ -42,6 +42,10 @@ export function ScheduleView() {
   // Edit assignment state
   const [editingAssignment, setEditingAssignment] = useState<Assignment | null>(null);
   const [editingServiceDate, setEditingServiceDate] = useState<string | null>(null);
+
+  // Incomplete schedule state
+  const [showIncompleteModal, setShowIncompleteModal] = useState(false);
+  const [emptySlots, setEmptySlots] = useState<EmptySlot[]>([]);
 
   useEffect(() => {
     fetchSchedules();
@@ -81,8 +85,24 @@ export function ScheduleView() {
     }
   };
 
-  const handlePublish = () => {
-    setShowConfirmPublish(true);
+  const handlePublish = async () => {
+    if (!currentSchedule) return;
+
+    try {
+      // Check completeness before publishing
+      const completeness = await scheduleApi.getCompleteness(currentSchedule.id);
+
+      if (!completeness.is_complete) {
+        setEmptySlots(completeness.empty_slots);
+        setShowIncompleteModal(true);
+        return;
+      }
+
+      setShowConfirmPublish(true);
+    } catch (error) {
+      console.error('Error checking completeness:', error);
+      showMessage('error', `Error al verificar completitud: ${error}`);
+    }
   };
 
   const confirmPublish = () => {
@@ -136,40 +156,113 @@ export function ScheduleView() {
     setEditingServiceDate(serviceDate);
   };
 
-  const handleSaveAssignment = async (assignmentId: string, newPersonId: string, newPersonName: string) => {
+  const handleSaveAssignment = async (assignmentId: string, newPersonId: string, _newPersonName: string) => {
+    const scheduleId = preview?.schedule.id || selectedScheduleId;
+    if (!scheduleId) return;
+
     try {
+      await scheduleApi.updateAssignment({
+        assignment_id: assignmentId,
+        new_person_id: newPersonId,
+      });
+
       if (preview) {
-        // For preview mode, update the state directly (no database call)
-        const updatedServiceDates = preview.schedule.service_dates.map((sd) => ({
-          ...sd,
-          assignments: sd.assignments.map((a) => {
-            if (a.id === assignmentId) {
-              return { ...a, person_id: newPersonId, person_name: newPersonName, manual_override: true };
-            }
-            return a;
-          }),
-        }));
+        const refreshed = await scheduleApi.get(scheduleId);
         setPreview({
           ...preview,
-          schedule: {
-            ...preview.schedule,
-            service_dates: updatedServiceDates,
-          },
+          schedule: refreshed,
         });
-        showMessage('success', 'Asignación actualizada');
-      } else if (selectedScheduleId) {
-        // For saved schedules, call the API
-        await scheduleApi.updateAssignment({
-          assignment_id: assignmentId,
-          new_person_id: newPersonId,
-        });
-        await fetchSchedule(selectedScheduleId);
-        showMessage('success', 'Asignación actualizada');
+      } else {
+        await fetchSchedule(scheduleId);
       }
+      showMessage('success', 'Asignacion actualizada');
     } catch (error) {
       console.error('Error updating assignment:', error);
       showMessage('error', `Error al actualizar: ${error}`);
       throw error;
+    }
+  };
+
+  // Drag and Drop handlers - always call API since generate already saves to DB
+  const handleSwapAssignments = async (assignmentId1: string, assignmentId2: string) => {
+    const scheduleId = preview?.schedule.id || selectedScheduleId;
+    if (!scheduleId) return;
+
+    try {
+      await scheduleApi.swapAssignments({
+        assignment_id_1: assignmentId1,
+        assignment_id_2: assignmentId2,
+      });
+
+      if (preview) {
+        // Refresh the preview from database
+        const refreshed = await scheduleApi.get(scheduleId);
+        setPreview({
+          ...preview,
+          schedule: refreshed,
+        });
+      } else {
+        await fetchSchedule(scheduleId);
+      }
+      showMessage('success', 'Asignaciones intercambiadas');
+    } catch (error) {
+      console.error('Error swapping assignments:', error);
+      showMessage('error', `Error al intercambiar: ${error}`);
+    }
+  };
+
+  const handleMoveAssignment = async (
+    assignmentId: string,
+    targetServiceDateId: string,
+    targetJobId: string,
+    targetPosition: number
+  ) => {
+    const scheduleId = preview?.schedule.id || selectedScheduleId;
+    if (!scheduleId) return;
+
+    try {
+      await scheduleApi.moveAssignment(assignmentId, {
+        target_service_date_id: targetServiceDateId,
+        target_job_id: targetJobId,
+        target_position: targetPosition,
+      });
+
+      if (preview) {
+        const refreshed = await scheduleApi.get(scheduleId);
+        setPreview({
+          ...preview,
+          schedule: refreshed,
+        });
+      } else {
+        await fetchSchedule(scheduleId);
+      }
+      showMessage('success', 'Asignacion movida');
+    } catch (error) {
+      console.error('Error moving assignment:', error);
+      showMessage('error', `Error al mover: ${error}`);
+    }
+  };
+
+  const handleClearAssignment = async (assignmentId: string) => {
+    const scheduleId = preview?.schedule.id || selectedScheduleId;
+    if (!scheduleId) return;
+
+    try {
+      await scheduleApi.clearAssignment(assignmentId);
+
+      if (preview) {
+        const refreshed = await scheduleApi.get(scheduleId);
+        setPreview({
+          ...preview,
+          schedule: refreshed,
+        });
+      } else {
+        await fetchSchedule(scheduleId);
+      }
+      showMessage('success', 'Asignacion vaciada');
+    } catch (error) {
+      console.error('Error clearing assignment:', error);
+      showMessage('error', `Error al vaciar: ${error}`);
     }
   };
 
@@ -195,7 +288,7 @@ export function ScheduleView() {
 
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Gestión de Horarios</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Gestion de Horarios</h1>
           <p className="text-gray-500 mt-1">Generar y administrar horarios de voluntarios</p>
         </div>
         <Button onClick={() => setIsGeneratorOpen(true)}>
@@ -213,7 +306,7 @@ export function ScheduleView() {
           <div className="divide-y divide-gray-100 max-h-96 overflow-y-auto">
             {schedules.length === 0 ? (
               <div className="p-4 text-center text-gray-500 text-sm">
-                No hay horarios aún
+                No hay horarios aun
               </div>
             ) : (
               schedules.map((schedule) => (
@@ -255,7 +348,7 @@ export function ScheduleView() {
                 <div>
                   <h3 className="font-medium text-yellow-800">Modo Vista Previa</h3>
                   <p className="text-sm text-yellow-700 mt-1">
-                    Revise el horario generado antes de guardar. Puede editar las asignaciones haciendo clic en el icono de lápiz.
+                    Revise el horario generado antes de guardar. Arrastre para intercambiar o mover asignaciones.
                   </p>
                 </div>
                 <div className="flex space-x-2">
@@ -291,7 +384,7 @@ export function ScheduleView() {
                       {displaySchedule.service_dates.length} fechas de servicio
                       {isEditable && (
                         <span className="ml-2 text-primary-600">
-                          (Haga clic en el lápiz para editar asignaciones)
+                          (Arrastre para mover o intercambiar asignaciones)
                         </span>
                       )}
                     </p>
@@ -321,6 +414,9 @@ export function ScheduleView() {
                 jobs={jobs}
                 editable={isEditable}
                 onEditAssignment={handleEditAssignment}
+                onSwapAssignments={handleSwapAssignments}
+                onMoveAssignment={handleMoveAssignment}
+                onClearAssignment={handleClearAssignment}
               />
             </>
           ) : (
@@ -361,18 +457,60 @@ export function ScheduleView() {
       <Modal
         isOpen={showConfirmPublish}
         onClose={() => setShowConfirmPublish(false)}
-        title="Confirmar Publicación"
+        title="Confirmar Publicacion"
       >
         <div className="space-y-4">
           <p className="text-gray-600">
-            ¿Está seguro de publicar este horario? Esto lo hará oficial.
+            Esta seguro de publicar este horario? Esto lo hara oficial.
           </p>
           <div className="flex justify-end space-x-3">
             <Button variant="secondary" onClick={() => setShowConfirmPublish(false)}>
               Cancelar
             </Button>
             <Button onClick={confirmPublish}>
-              Sí, Publicar
+              Si, Publicar
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Incomplete Schedule Modal */}
+      <Modal
+        isOpen={showIncompleteModal}
+        onClose={() => setShowIncompleteModal(false)}
+        title="Horario Incompleto"
+      >
+        <div className="space-y-4">
+          <div className="flex items-start space-x-3">
+            <AlertCircle className="w-6 h-6 text-red-500 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-gray-700 font-medium">
+                No se puede publicar el horario porque hay {emptySlots.length} posicion(es) sin asignar.
+              </p>
+              <p className="text-sm text-gray-500 mt-1">
+                Complete todas las asignaciones antes de publicar.
+              </p>
+            </div>
+          </div>
+
+          <div className="bg-gray-50 rounded-lg p-3 max-h-64 overflow-y-auto">
+            <h4 className="text-sm font-medium text-gray-700 mb-2">Posiciones vacias:</h4>
+            <ul className="space-y-1">
+              {emptySlots.map((slot, idx) => (
+                <li key={idx} className="text-sm text-gray-600 flex items-center space-x-2">
+                  <span className="w-2 h-2 bg-red-400 rounded-full"></span>
+                  <span>
+                    {slot.service_date} - {slot.job_name}
+                    {slot.position_name && ` (${slot.position_name})`}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="flex justify-end">
+            <Button onClick={() => setShowIncompleteModal(false)}>
+              Entendido
             </Button>
           </div>
         </div>
@@ -382,18 +520,18 @@ export function ScheduleView() {
       <Modal
         isOpen={showConfirmDelete}
         onClose={() => setShowConfirmDelete(false)}
-        title="Confirmar Eliminación"
+        title="Confirmar Eliminacion"
       >
         <div className="space-y-4">
           <p className="text-gray-600">
-            ¿Está seguro de eliminar este horario? Esta acción no se puede deshacer.
+            Esta seguro de eliminar este horario? Esta accion no se puede deshacer.
           </p>
           <div className="flex justify-end space-x-3">
             <Button variant="secondary" onClick={() => setShowConfirmDelete(false)}>
               Cancelar
             </Button>
             <Button variant="danger" onClick={confirmDelete}>
-              Sí, Eliminar
+              Si, Eliminar
             </Button>
           </div>
         </div>

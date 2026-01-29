@@ -17,6 +17,9 @@ import type {
   PersonAssignmentDetail,
   EligiblePerson,
   GetEligiblePeopleRequest,
+  SwapAssignmentsRequest,
+  MoveAssignmentRequest,
+  CompletenessResponse,
 } from '../types';
 import { useAuthStore } from '../stores/authStore';
 
@@ -141,6 +144,14 @@ export const scheduleApi = {
   },
   updateAssignment: (request: UpdateAssignmentRequest) =>
     put<Assignment>(`/assignments/${request.assignment_id}`, { person_id: request.new_person_id }),
+  clearAssignment: (assignmentId: string) =>
+    put<Assignment>(`/assignments/${assignmentId}/clear`),
+  swapAssignments: (request: SwapAssignmentsRequest) =>
+    post<Assignment[]>('/assignments/swap', request),
+  moveAssignment: (assignmentId: string, request: MoveAssignmentRequest) =>
+    put<Assignment[]>(`/assignments/${assignmentId}/move`, request),
+  getCompleteness: (scheduleId: string) =>
+    get<CompletenessResponse>(`/schedules/${scheduleId}/completeness`),
   publish: (id: string) => post<Schedule>(`/schedules/${id}/publish`),
   delete: (id: string) => del<void>(`/schedules/${id}`),
   getFairnessScores: (year: number) => get<FairnessScore[]>(`/reports/fairness?year=${year}`),
