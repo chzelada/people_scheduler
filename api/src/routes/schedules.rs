@@ -249,10 +249,23 @@ fn get_sundays_of_month(year: i32, month: u32) -> Vec<NaiveDate> {
 
 /// Check if two jobs are mutually exclusive (a person can only be assigned to one per date)
 fn are_jobs_exclusive(job1: &str, job2: &str) -> bool {
-    let exclusive_pairs = [("monaguillos", "monaguillos_jr")];
+    let exclusive_pairs = [
+        ("monaguillos", "monaguillos_jr"),
+        ("monaguillos", "lectores"),  // Can't be monaguillo and lector same day
+    ];
     exclusive_pairs
         .iter()
         .any(|(a, b)| (job1 == *a && job2 == *b) || (job1 == *b && job2 == *a))
+}
+
+/// Check if a job has the consecutive month restriction (monaguillos and lectores only)
+fn has_consecutive_month_restriction(job_id: &str) -> bool {
+    job_id == "monaguillos" || job_id == "lectores"
+}
+
+/// Count Sundays in a given month
+fn count_sundays_in_month(year: i32, month: u32) -> u32 {
+    get_sundays_of_month(year, month).len() as u32
 }
 
 #[derive(FromRow, Clone)]
@@ -305,7 +318,7 @@ async fn generate_job_assignments(
     .map_err(|e| e.to_string())?;
 
     // Filter out candidates already assigned to an exclusive job
-    let candidates: Vec<CandidatePerson> = all_candidates
+    let mut candidates: Vec<CandidatePerson> = all_candidates
         .into_iter()
         .filter(|candidate| {
             // Check if this person is already assigned to an exclusive job
@@ -318,6 +331,57 @@ async fn generate_job_assignments(
             }
         })
         .collect();
+
+    // Apply consecutive month restriction for monaguillos and lectores
+    // Rule: Cannot serve in same role two consecutive months, UNLESS current month has 5 Sundays
+    if has_consecutive_month_restriction(&job.id) {
+        let current_month = service_date.service_date.month();
+        let current_year = service_date.service_date.year();
+        let sundays_this_month = count_sundays_in_month(current_year, current_month);
+
+        // Only apply restriction if current month has 4 or fewer Sundays
+        if sundays_this_month <= 4 {
+            // Calculate previous month
+            let (prev_year, prev_month) = if current_month == 1 {
+                (current_year - 1, 12u32)
+            } else {
+                (current_year, current_month - 1)
+            };
+
+            // Get list of people who served in this job last month
+            let served_last_month: Vec<String> = sqlx::query_scalar(
+                r#"
+                SELECT DISTINCT person_id
+                FROM assignment_history
+                WHERE job_id = $1
+                  AND EXTRACT(YEAR FROM service_date) = $2
+                  AND EXTRACT(MONTH FROM service_date) = $3
+                "#,
+            )
+            .bind(&job.id)
+            .bind(prev_year)
+            .bind(prev_month as i32)
+            .fetch_all(pool)
+            .await
+            .map_err(|e| e.to_string())?;
+
+            // Filter out those who served last month
+            candidates.retain(|c| !served_last_month.contains(&c.id));
+
+            tracing::info!(
+                "Consecutive month filter for {}: {} served last month, {} candidates remaining",
+                job.id,
+                served_last_month.len(),
+                candidates.len()
+            );
+        } else {
+            tracing::info!(
+                "Skipping consecutive month restriction for {} - month has {} Sundays",
+                job.id,
+                sundays_this_month
+            );
+        }
+    }
 
     if candidates.is_empty() {
         return Ok(Vec::new());
