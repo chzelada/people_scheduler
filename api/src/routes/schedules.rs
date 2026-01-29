@@ -189,14 +189,18 @@ pub async fn generate(
     // Generate assignments using the algorithm
     let mut dates_with_assignments = Vec::new();
 
+    // Track who has been assigned to each job this month (for limiting assignments per month)
+    // person_id -> list of job_ids they've been assigned
+    let mut assigned_this_month: HashMap<String, Vec<String>> = HashMap::new();
+
     for sd in service_dates {
         let mut assignments = Vec::new();
-        // Track person_id -> job_name for exclusivity checking
+        // Track person_id -> job_name for exclusivity checking (same day)
         let mut assigned_this_date: HashMap<String, String> = HashMap::new();
 
         for job in &jobs {
             let job_assignments =
-                generate_job_assignments(&pool, &sd, job, year, &assigned_this_date)
+                generate_job_assignments(&pool, &sd, job, year, &assigned_this_date, &assigned_this_month)
                     .await
                     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
 
@@ -204,6 +208,11 @@ pub async fn generate(
             for assignment in &job_assignments {
                 if let Some(pid) = &assignment.assignment.person_id {
                     assigned_this_date.insert(pid.clone(), job.name.clone());
+                    // Also track for monthly limit
+                    assigned_this_month
+                        .entry(pid.clone())
+                        .or_insert_with(Vec::new)
+                        .push(job.id.clone());
                 }
             }
 
@@ -297,6 +306,7 @@ async fn generate_job_assignments(
     job: &Job,
     year: i32,
     assigned_this_date: &HashMap<String, String>,
+    assigned_this_month: &HashMap<String, Vec<String>>, // person_id -> list of job_ids they've been assigned this month
 ) -> Result<Vec<AssignmentWithDetails>, String> {
     let num_positions = job.people_required as i32;
 
@@ -385,6 +395,42 @@ async fn generate_job_assignments(
                 sundays_this_month
             );
         }
+    }
+
+    // Filter out people who have already been assigned to this job this month
+    // (limit to 1 assignment per job per month, unless not enough candidates)
+    let candidates_before_monthly = candidates.len();
+    let candidates_without_monthly: Vec<CandidatePerson> = candidates
+        .iter()
+        .filter(|c| {
+            if let Some(jobs_assigned) = assigned_this_month.get(&c.id) {
+                !jobs_assigned.contains(&job.id)
+            } else {
+                true
+            }
+        })
+        .cloned()
+        .collect();
+
+    // If we don't have enough candidates after monthly filter, fall back to all candidates
+    // (this allows people to serve multiple times if necessary)
+    if candidates_without_monthly.len() >= job.people_required as usize {
+        tracing::info!(
+            "Monthly limit filter for {}: {} -> {} candidates (filtered {} who already served this month)",
+            job.name,
+            candidates_before_monthly,
+            candidates_without_monthly.len(),
+            candidates_before_monthly - candidates_without_monthly.len()
+        );
+        candidates = candidates_without_monthly;
+    } else {
+        tracing::warn!(
+            "Not enough candidates for {} after monthly filter ({} needed, {} available). Using all {} candidates.",
+            job.name,
+            job.people_required,
+            candidates_without_monthly.len(),
+            candidates.len()
+        );
     }
 
     if candidates.is_empty() {
