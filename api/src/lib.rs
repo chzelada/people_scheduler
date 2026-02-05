@@ -8,26 +8,29 @@ use sqlx::PgPool;
 use tower_http::trace::TraceLayer;
 
 pub fn create_app(pool: PgPool) -> Router {
-    routes::create_router(pool)
-        .layer(TraceLayer::new_for_http())
+    routes::create_router(pool).layer(TraceLayer::new_for_http())
 }
 
 pub async fn init_database(pool: &PgPool) -> Result<(), Box<dyn std::error::Error>> {
     // Run migrations
-    sqlx::query(include_str!("../../migrations-postgres/001_initial_schema.sql"))
-        .execute(pool)
-        .await
-        .ok(); // Ignore errors if already exists
+    sqlx::query(include_str!(
+        "../../migrations-postgres/001_initial_schema.sql"
+    ))
+    .execute(pool)
+    .await
+    .ok(); // Ignore errors if already exists
 
     sqlx::query(include_str!("../../migrations-postgres/002_add_users.sql"))
         .execute(pool)
         .await
         .ok(); // Ignore errors if already exists
 
-    sqlx::query(include_str!("../../migrations-postgres/005_add_monaguillos_jr.sql"))
-        .execute(pool)
-        .await
-        .ok(); // Ignore errors if already exists
+    sqlx::query(include_str!(
+        "../../migrations-postgres/005_add_monaguillos_jr.sql"
+    ))
+    .execute(pool)
+    .await
+    .ok(); // Ignore errors if already exists
 
     // Migration 006: Make person_id nullable for drag-and-drop editing
     // Run each statement separately since complex SQL doesn't work well as single query
@@ -45,6 +48,32 @@ pub async fn init_database(pool: &PgPool) -> Result<(), Box<dyn std::error::Erro
     {
         Ok(_) => tracing::info!("Migration 006b: old constraint dropped"),
         Err(e) => tracing::warn!("Migration 006b: {}", e),
+    }
+
+    // Migration 007: Add exclude_monaguillos and exclude_lectores columns
+    match sqlx::query("ALTER TABLE people ADD COLUMN IF NOT EXISTS exclude_monaguillos BOOLEAN NOT NULL DEFAULT FALSE")
+        .execute(pool)
+        .await
+    {
+        Ok(_) => tracing::info!("Migration 007a: exclude_monaguillos column added"),
+        Err(e) => tracing::warn!("Migration 007a: {}", e),
+    }
+
+    match sqlx::query("ALTER TABLE people ADD COLUMN IF NOT EXISTS exclude_lectores BOOLEAN NOT NULL DEFAULT FALSE")
+        .execute(pool)
+        .await
+    {
+        Ok(_) => tracing::info!("Migration 007b: exclude_lectores column added"),
+        Err(e) => tracing::warn!("Migration 007b: {}", e),
+    }
+
+    // Migration 008: Add photo_url column for profile photos
+    match sqlx::query("ALTER TABLE people ADD COLUMN IF NOT EXISTS photo_url TEXT")
+        .execute(pool)
+        .await
+    {
+        Ok(_) => tracing::info!("Migration 008: photo_url column added"),
+        Err(e) => tracing::warn!("Migration 008: {}", e),
     }
 
     // Initialize admin user if not exists

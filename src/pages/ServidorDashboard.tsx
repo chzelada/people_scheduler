@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { format, parseISO, isSameMonth, startOfMonth, addMonths, subMonths, eachDayOfInterval, startOfWeek, endOfWeek, endOfMonth, isToday, isSameDay, isSunday } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Calendar, ChevronLeft, ChevronRight, Star, LogOut, Key, XCircle, CalendarX, Trash2 } from 'lucide-react';
-import { scheduleApi, myUnavailabilityApi, MyAssignment } from '../services/api';
+import { Calendar, ChevronLeft, ChevronRight, Star, LogOut, Key, XCircle, CalendarX, Trash2, Camera } from 'lucide-react';
+import { scheduleApi, myUnavailabilityApi, myPhotoApi, peopleApi, MyAssignment } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
-import { Button, Modal, Input } from '../components/common';
-import type { Unavailability } from '../types';
+import { Button, Modal, Input, Avatar, PhotoUpload } from '../components/common';
+import type { Unavailability, Person } from '../types';
 
 export function ServidorDashboard() {
   const { user, logout, changePassword } = useAuthStore();
@@ -24,12 +24,27 @@ export function ServidorDashboard() {
   const [unavailabilityReason, setUnavailabilityReason] = useState('');
   const [isSavingUnavailability, setIsSavingUnavailability] = useState(false);
 
+  // Photo state
+  const [personData, setPersonData] = useState<Person | null>(null);
+  const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
+
   useEffect(() => {
     if (user?.person_id) {
       fetchAssignments();
       fetchUnavailabilities();
+      fetchPersonData();
     }
   }, [user?.person_id]);
+
+  const fetchPersonData = async () => {
+    if (!user?.person_id) return;
+    try {
+      const data = await peopleApi.get(user.person_id);
+      setPersonData(data);
+    } catch (error) {
+      console.error('Error fetching person data:', error);
+    }
+  };
 
   const fetchAssignments = async () => {
     if (!user?.person_id) return;
@@ -107,6 +122,25 @@ export function ServidorDashboard() {
     return unavailabilities.find(u => isSameDay(parseISO(u.start_date), date));
   };
 
+  const handleUploadPhoto = async (photoData: string) => {
+    await myPhotoApi.upload(photoData);
+    // Reload person data to get the updated photo
+    if (user?.person_id) {
+      const updatedPerson = await peopleApi.get(user.person_id);
+      setPersonData(updatedPerson);
+    }
+    setIsPhotoModalOpen(false);
+  };
+
+  const handleDeletePhoto = async () => {
+    await myPhotoApi.delete();
+    // Reload person data
+    if (user?.person_id) {
+      const updatedPerson = await peopleApi.get(user.person_id);
+      setPersonData(updatedPerson);
+    }
+  };
+
   // Separate upcoming and past assignments
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -167,12 +201,21 @@ export function ServidorDashboard() {
       <header className="bg-white shadow-sm">
         <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
-              <Star className="w-6 h-6 text-white" />
-            </div>
+            <button
+              onClick={() => setIsPhotoModalOpen(true)}
+              className="relative"
+              title="Cambiar foto de perfil"
+            >
+              <Avatar
+                photoUrl={personData?.photo_url}
+                firstName={personData?.first_name || 'U'}
+                lastName={personData?.last_name || ''}
+                size="xl"
+              />
+            </button>
             <div>
               <h1 className="text-xl font-bold text-gray-900">
-                ¡Hola, {user?.username}!
+                ¡Hola, {personData?.first_name || user?.username}!
               </h1>
               <p className="text-sm text-gray-500">Bienvenido a tu horario de servicio</p>
             </div>
@@ -605,6 +648,33 @@ export function ServidorDashboard() {
             >
               <XCircle className="w-4 h-4 mr-2" />
               Marcar como No Disponible
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Photo Upload Modal */}
+      <Modal
+        isOpen={isPhotoModalOpen}
+        onClose={() => setIsPhotoModalOpen(false)}
+        title="Foto de Perfil"
+      >
+        <div className="space-y-4">
+          <div className="flex justify-center">
+            <PhotoUpload
+              photoUrl={personData?.photo_url}
+              firstName={personData?.first_name || 'U'}
+              lastName={personData?.last_name || ''}
+              onUpload={handleUploadPhoto}
+              onDelete={handleDeletePhoto}
+            />
+          </div>
+          <div className="flex justify-end pt-4">
+            <Button
+              variant="secondary"
+              onClick={() => setIsPhotoModalOpen(false)}
+            >
+              Cerrar
             </Button>
           </div>
         </div>

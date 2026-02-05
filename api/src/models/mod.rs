@@ -40,6 +40,11 @@ pub struct Person {
     pub notes: Option<String>,
     pub created_at: Option<DateTime<Utc>>,
     pub updated_at: Option<DateTime<Utc>>,
+    // Added via migration 007 - must be at end to match DB column order
+    pub exclude_monaguillos: bool,
+    pub exclude_lectores: bool,
+    // Added via migration 008 - profile photo as base64 data URI
+    pub photo_url: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -85,6 +90,13 @@ pub struct UpdatePerson {
     pub active: Option<bool>,
     pub notes: Option<String>,
     pub job_ids: Option<Vec<String>>,
+    pub exclude_monaguillos: Option<bool>,
+    pub exclude_lectores: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UploadPhotoRequest {
+    pub photo_data: String,
 }
 
 // ============ Person Jobs ============

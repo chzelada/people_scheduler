@@ -45,7 +45,7 @@ pub async fn get_fairness_scores(
         WHERE p.active = true
         GROUP BY p.id, p.first_name, p.last_name
         ORDER BY assignments_this_year DESC, p.last_name, p.first_name
-        "#
+        "#,
     )
     .bind(query.year)
     .fetch_all(&pool)
@@ -65,7 +65,7 @@ pub async fn get_fairness_scores(
             JOIN jobs j ON ah.job_id = j.id
             WHERE ah.person_id = $1 AND ah.year = $2
             GROUP BY j.name
-            "#
+            "#,
         )
         .bind(&row.person_id)
         .bind(query.year)
@@ -119,7 +119,7 @@ pub async fn get_person_history(
         LEFT JOIN job_positions jp ON ah.job_id = jp.job_id AND ah.position = jp.position_number
         WHERE ah.person_id = $1
         ORDER BY ah.service_date DESC
-        "#
+        "#,
     )
     .bind(&person_id)
     .fetch_all(&pool)

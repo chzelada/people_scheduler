@@ -4,6 +4,7 @@ import { Button, Modal, Input } from '../components/common';
 import { PersonList, PersonForm } from '../components/people';
 import { usePeopleStore } from '../stores/peopleStore';
 import { useJobsStore } from '../stores/jobsStore';
+import { peopleApi } from '../services/api';
 import type { Person, PersonWithCredentials, CreatePersonRequest, UpdatePersonRequest } from '../types';
 
 interface CsvPerson {
@@ -121,6 +122,36 @@ export function PeopleManagement() {
   const handleDelete = async (person: Person) => {
     if (window.confirm(`¿Está seguro de eliminar a ${person.first_name} ${person.last_name}?`)) {
       await deletePerson(person.id);
+    }
+  };
+
+  const handleToggleExclusion = async (personId: string, field: 'exclude_monaguillos' | 'exclude_lectores', value: boolean) => {
+    await updatePerson({ id: personId, [field]: value });
+  };
+
+  const handleUploadPhoto = async (personId: string, photoData: string) => {
+    await peopleApi.uploadPhoto(personId, photoData);
+    // Refresh the person data
+    await fetchPeople();
+    // Update editingPerson if we're editing this person
+    if (editingPerson?.id === personId) {
+      const updated = people.find(p => p.id === personId);
+      if (updated) {
+        setEditingPerson({ ...updated, photo_url: photoData });
+      }
+    }
+  };
+
+  const handleDeletePhoto = async (personId: string) => {
+    await peopleApi.deletePhoto(personId);
+    // Refresh the person data
+    await fetchPeople();
+    // Update editingPerson if we're editing this person
+    if (editingPerson?.id === personId) {
+      const updated = people.find(p => p.id === personId);
+      if (updated) {
+        setEditingPerson({ ...updated, photo_url: undefined });
+      }
     }
   };
 
@@ -320,6 +351,7 @@ export function PeopleManagement() {
           onDelete={handleDelete}
           onResetPassword={handleResetPassword}
           onCreateUser={handleCreateUser}
+          onToggleExclusion={handleToggleExclusion}
         />
 
         <div className="px-6 py-4 border-t border-gray-200 text-sm text-gray-500">
@@ -340,6 +372,8 @@ export function PeopleManagement() {
           onCancel={() => { setIsModalOpen(false); setEditingPerson(null); }}
           onResetPassword={handleResetPassword}
           onCreateUser={handleCreateUser}
+          onUploadPhoto={handleUploadPhoto}
+          onDeletePhoto={handleDeletePhoto}
           isLoading={isLoading}
         />
       </Modal>

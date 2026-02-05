@@ -1,13 +1,13 @@
+use argon2::{
+    password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
+    Argon2,
+};
 use axum::{
     extract::{Request, State},
     http::{header, StatusCode},
     middleware::Next,
     response::{IntoResponse, Response},
     Json,
-};
-use argon2::{
-    password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
-    Argon2,
 };
 use chrono::{Duration, Utc};
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
@@ -16,17 +16,18 @@ use sqlx::PgPool;
 
 // JWT secret - in production, use environment variable
 fn get_jwt_secret() -> String {
-    std::env::var("JWT_SECRET").unwrap_or_else(|_| "people-scheduler-secret-key-change-in-production".to_string())
+    std::env::var("JWT_SECRET")
+        .unwrap_or_else(|_| "people-scheduler-secret-key-change-in-production".to_string())
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Claims {
-    pub sub: String,      // user id
+    pub sub: String, // user id
     pub username: String,
     pub role: String,
-    pub person_id: Option<String>,  // linked person for servidores
-    pub exp: i64,         // expiration time
-    pub iat: i64,         // issued at
+    pub person_id: Option<String>, // linked person for servidores
+    pub exp: i64,                  // expiration time
+    pub iat: i64,                  // issued at
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -116,7 +117,7 @@ pub async fn login(
 ) -> Result<Json<LoginResponse>, (StatusCode, String)> {
     // Find user by username
     let user = sqlx::query_as::<_, User>(
-        "SELECT id, username, password_hash, role, person_id FROM users WHERE username = $1"
+        "SELECT id, username, password_hash, role, person_id FROM users WHERE username = $1",
     )
     .bind(&request.username)
     .fetch_optional(&pool)
@@ -134,8 +135,8 @@ pub async fn login(
     }
 
     // Generate token
-    let token = generate_token(&user)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let token =
+        generate_token(&user).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok(Json(LoginResponse {
         token,
@@ -153,7 +154,7 @@ pub async fn change_password(
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     // Get current user
     let user = sqlx::query_as::<_, User>(
-        "SELECT id, username, password_hash, role, person_id FROM users WHERE id = $1"
+        "SELECT id, username, password_hash, role, person_id FROM users WHERE id = $1",
     )
     .bind(uuid::Uuid::parse_str(&claims.sub).unwrap())
     .fetch_optional(&pool)
@@ -167,12 +168,18 @@ pub async fn change_password(
 
     // Verify current password
     if !verify_password(&request.current_password, &user.password_hash) {
-        return Err((StatusCode::UNAUTHORIZED, "Current password is incorrect".to_string()));
+        return Err((
+            StatusCode::UNAUTHORIZED,
+            "Current password is incorrect".to_string(),
+        ));
     }
 
     // Validate new password
     if request.new_password.len() < 6 {
-        return Err((StatusCode::BAD_REQUEST, "New password must be at least 6 characters".to_string()));
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "New password must be at least 6 characters".to_string(),
+        ));
     }
 
     // Hash new password
@@ -180,14 +187,18 @@ pub async fn change_password(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     // Update password
-    sqlx::query("UPDATE users SET password_hash = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2")
-        .bind(&new_hash)
-        .bind(user.id)
-        .execute(&pool)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    sqlx::query(
+        "UPDATE users SET password_hash = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2",
+    )
+    .bind(&new_hash)
+    .bind(user.id)
+    .execute(&pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    Ok(Json(serde_json::json!({ "message": "Password changed successfully" })))
+    Ok(Json(
+        serde_json::json!({ "message": "Password changed successfully" }),
+    ))
 }
 
 // Get current user info
@@ -214,7 +225,11 @@ pub async fn auth_middleware(
     let token = match auth_header {
         Some(header) if header.starts_with("Bearer ") => &header[7..],
         _ => {
-            return (StatusCode::UNAUTHORIZED, "Missing or invalid authorization header").into_response();
+            return (
+                StatusCode::UNAUTHORIZED,
+                "Missing or invalid authorization header",
+            )
+                .into_response();
         }
     };
 
@@ -255,7 +270,7 @@ where
 pub async fn init_admin_user(pool: &PgPool) -> Result<(), sqlx::Error> {
     // Check if admin user exists
     let exists = sqlx::query_scalar::<_, bool>(
-        "SELECT EXISTS(SELECT 1 FROM users WHERE username = 'admin')"
+        "SELECT EXISTS(SELECT 1 FROM users WHERE username = 'admin')",
     )
     .fetch_one(pool)
     .await?;
@@ -263,7 +278,7 @@ pub async fn init_admin_user(pool: &PgPool) -> Result<(), sqlx::Error> {
     if !exists {
         let password_hash = hash_password("admin123").expect("Failed to hash password");
         sqlx::query(
-            "INSERT INTO users (username, password_hash, role) VALUES ('admin', $1, 'admin')"
+            "INSERT INTO users (username, password_hash, role) VALUES ('admin', $1, 'admin')",
         )
         .bind(&password_hash)
         .execute(pool)

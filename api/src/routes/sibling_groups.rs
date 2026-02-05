@@ -11,17 +11,15 @@ use crate::models::{CreateSiblingGroup, SiblingGroup, SiblingGroupWithMembers};
 pub async fn get_all(
     State(pool): State<PgPool>,
 ) -> Result<Json<Vec<SiblingGroupWithMembers>>, (StatusCode, String)> {
-    let groups = sqlx::query_as::<_, SiblingGroup>(
-        "SELECT * FROM sibling_groups ORDER BY name"
-    )
-    .fetch_all(&pool)
-    .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let groups = sqlx::query_as::<_, SiblingGroup>("SELECT * FROM sibling_groups ORDER BY name")
+        .fetch_all(&pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     let mut result = Vec::new();
     for group in groups {
         let member_ids: Vec<String> = sqlx::query_scalar(
-            "SELECT person_id FROM sibling_group_members WHERE sibling_group_id = $1"
+            "SELECT person_id FROM sibling_group_members WHERE sibling_group_id = $1",
         )
         .bind(&group.id)
         .fetch_all(&pool)
@@ -45,7 +43,7 @@ pub async fn create(
         INSERT INTO sibling_groups (id, name, pairing_rule)
         VALUES ($1, $2, $3)
         RETURNING *
-        "#
+        "#,
     )
     .bind(&id)
     .bind(&input.name)
@@ -68,7 +66,10 @@ pub async fn create(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     }
 
-    Ok(Json(SiblingGroupWithMembers { group, member_ids: input.member_ids }))
+    Ok(Json(SiblingGroupWithMembers {
+        group,
+        member_ids: input.member_ids,
+    }))
 }
 
 pub async fn update(
@@ -83,7 +84,7 @@ pub async fn update(
         SET name = $1, pairing_rule = $2
         WHERE id = $3
         RETURNING *
-        "#
+        "#,
     )
     .bind(&input.name)
     .bind(&input.pairing_rule)
@@ -112,7 +113,10 @@ pub async fn update(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     }
 
-    Ok(Json(SiblingGroupWithMembers { group, member_ids: input.member_ids }))
+    Ok(Json(SiblingGroupWithMembers {
+        group,
+        member_ids: input.member_ids,
+    }))
 }
 
 pub async fn delete(

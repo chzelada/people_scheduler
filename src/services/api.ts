@@ -106,6 +106,14 @@ export const peopleApi = {
   },
   resetPassword: (personId: string) => post<{ message: string; new_password: string }>(`/people/${personId}/reset-password`),
   createUserAccount: (personId: string) => post<{ username: string; password: string }>(`/people/${personId}/create-user`),
+  uploadPhoto: (personId: string, photoData: string) => post<{ message: string }>(`/people/${personId}/photo`, { photo_data: photoData }),
+  deletePhoto: (personId: string) => del<{ message: string }>(`/people/${personId}/photo`),
+};
+
+// My Photo API (for servidores self-service)
+export const myPhotoApi = {
+  upload: (photoData: string) => post<{ message: string }>('/my-photo', { photo_data: photoData }),
+  delete: () => del<{ message: string }>('/my-photo'),
 };
 
 // Jobs API

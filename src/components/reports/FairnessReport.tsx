@@ -68,6 +68,7 @@ export function FairnessReport({ scores, year }: FairnessReportProps) {
         <div className="flex-1">Distribución</div>
         <div className="w-16 text-center">Total</div>
         <div className="w-20 text-center">Monaguillo</div>
+        <div className="w-16 text-center">Mon. Jr.</div>
         <div className="w-16 text-center">Lector</div>
         <div className="w-24 text-right">Última Fecha</div>
       </div>
@@ -76,6 +77,7 @@ export function FairnessReport({ scores, year }: FairnessReportProps) {
         {filteredScores.map((score) => {
           const percentage = (score.assignments_this_year / maxAssignments) * 100;
           const monaguilloCount = getJobCount(score, 'Monaguillos');
+          const monaguilloJrCount = getJobCount(score, 'Monaguillos Jr.');
           const lectorCount = getJobCount(score, 'Lectores');
 
           return (
@@ -104,6 +106,11 @@ export function FairnessReport({ scores, year }: FairnessReportProps) {
               <div className="w-20 text-center">
                 <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
                   {monaguilloCount}
+                </span>
+              </div>
+              <div className="w-16 text-center">
+                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">
+                  {monaguilloJrCount}
                 </span>
               </div>
               <div className="w-16 text-center">

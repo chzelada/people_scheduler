@@ -10,6 +10,9 @@ export interface Person {
   preference_level: number;
   active: boolean;
   notes?: string;
+  exclude_monaguillos: boolean;
+  exclude_lectores: boolean;
+  photo_url?: string;
   created_at?: string;
   updated_at?: string;
   job_ids: string[];
@@ -48,6 +51,8 @@ export interface UpdatePersonRequest {
   active?: boolean;
   notes?: string;
   job_ids?: string[];
+  exclude_monaguillos?: boolean;
+  exclude_lectores?: boolean;
 }
 
 // Job types

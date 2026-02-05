@@ -14,7 +14,7 @@ use crate::models::{CreateUnavailability, Unavailability, UnavailabilityWithPers
 // Input for servidor self-service unavailability
 #[derive(Debug, Deserialize)]
 pub struct CreateMyUnavailability {
-    pub dates: Vec<NaiveDate>,  // List of dates to mark as unavailable
+    pub dates: Vec<NaiveDate>, // List of dates to mark as unavailable
     pub reason: Option<String>,
 }
 
@@ -41,7 +41,7 @@ pub async fn get_all(
         FROM unavailability u
         JOIN people p ON u.person_id = p.id
         ORDER BY u.start_date DESC
-        "#
+        "#,
     )
     .fetch_all(&pool)
     .await
@@ -80,7 +80,7 @@ pub async fn create(
         RETURNING
             id, person_id, start_date, end_date, reason, recurring, created_at,
             (SELECT first_name || ' ' || last_name FROM people WHERE id = $2) as person_name
-        "#
+        "#,
     )
     .bind(&id)
     .bind(&input.person_id)
@@ -119,7 +119,10 @@ pub async fn delete(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     if result.rows_affected() == 0 {
-        return Err((StatusCode::NOT_FOUND, "Unavailability not found".to_string()));
+        return Err((
+            StatusCode::NOT_FOUND,
+            "Unavailability not found".to_string(),
+        ));
     }
 
     Ok(StatusCode::NO_CONTENT)
@@ -143,7 +146,7 @@ pub async fn get_my_unavailability(
         FROM unavailability
         WHERE person_id = $1
         ORDER BY start_date ASC
-        "#
+        "#,
     )
     .bind(&person_id)
     .fetch_all(&pool)
@@ -165,7 +168,10 @@ pub async fn create_my_unavailability(
     ))?;
 
     if input.dates.is_empty() {
-        return Err((StatusCode::BAD_REQUEST, "Debe seleccionar al menos una fecha".to_string()));
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "Debe seleccionar al menos una fecha".to_string(),
+        ));
     }
 
     let mut created: Vec<Unavailability> = Vec::new();
@@ -178,7 +184,7 @@ pub async fn create_my_unavailability(
             INSERT INTO unavailability (id, person_id, start_date, end_date, reason, recurring)
             VALUES ($1, $2, $3, $3, $4, false)
             RETURNING *
-            "#
+            "#,
         )
         .bind(&id)
         .bind(&person_id)
@@ -214,7 +220,10 @@ pub async fn delete_my_unavailability(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     if result.rows_affected() == 0 {
-        return Err((StatusCode::NOT_FOUND, "Ausencia no encontrada o no le pertenece".to_string()));
+        return Err((
+            StatusCode::NOT_FOUND,
+            "Ausencia no encontrada o no le pertenece".to_string(),
+        ));
     }
 
     Ok(StatusCode::NO_CONTENT)

@@ -42,6 +42,19 @@ export function EditAssignmentModal({
     }
   }, [isOpen, assignment]);
 
+  // Check if two jobs are mutually exclusive (can't serve both on same day)
+  const areJobsExclusive = (job1: string, job2: string): boolean => {
+    const j1 = job1.toLowerCase();
+    const j2 = job2.toLowerCase();
+    const exclusivePairs = [
+      ['monaguillos', 'monaguillos jr'],
+      ['monaguillos', 'lectores'],
+    ];
+    return exclusivePairs.some(
+      ([a, b]) => (j1 === a && j2 === b) || (j1 === b && j2 === a)
+    );
+  };
+
   const loadEligiblePeople = async () => {
     if (!assignment || !serviceDate) return;
     setLoading(true);
@@ -53,21 +66,55 @@ export function EditAssignmentModal({
         current_person_id: assignment.person_id || undefined,
       });
 
-      // Get person IDs already assigned in this schedule (excluding the current assignment being edited)
-      const alreadyAssignedInSchedule = new Set(
-        currentScheduleAssignments
-          .filter((a) => a.id !== assignment.id && a.person_id)
-          .map((a) => a.person_id!)
-      );
+      // Build lookup for eligibility rules:
+      // 1. Can't serve in the SAME job twice per month
+      // 2. Can't serve in EXCLUSIVE jobs on the SAME day (e.g., Monaguillo and Lector same day)
 
-      // Mark people who are already assigned elsewhere in this schedule
+      // Map person_id -> job_name for same job check
+      const assignedToSameJob = new Map<string, string>();
+      // Map person_id -> job_name for same day exclusive job check
+      const assignedOnSameDayExclusive = new Map<string, string>();
+
+      currentScheduleAssignments
+        .filter((a) => a.id !== assignment.id && a.person_id)
+        .forEach((a) => {
+          const personId = a.person_id!;
+          const otherJobName = a.job_name || '';
+
+          // Check 1: Same job anywhere in the schedule
+          if (a.job_id === assignment.job_id) {
+            assignedToSameJob.set(personId, otherJobName);
+          }
+
+          // Check 2: Exclusive job on the same day
+          if (a.service_date_id === assignment.service_date_id && areJobsExclusive(jobName, otherJobName)) {
+            assignedOnSameDayExclusive.set(personId, otherJobName);
+          }
+        });
+
+      // Mark people based on specific rules
       const peopleWithScheduleCheck = people.map((person) => {
-        if (alreadyAssignedInSchedule.has(person.id) && !person.reason_if_ineligible) {
+        if (person.reason_if_ineligible) {
+          return person; // Already has a reason
+        }
+
+        // Rule 1: Already assigned to same job this month
+        if (assignedToSameJob.has(person.id)) {
           return {
             ...person,
-            reason_if_ineligible: 'Ya asignado en este horario',
+            reason_if_ineligible: `Ya asignado como ${jobName} este mes`,
           };
         }
+
+        // Rule 2: Already assigned to exclusive job on same day
+        if (assignedOnSameDayExclusive.has(person.id)) {
+          const otherJob = assignedOnSameDayExclusive.get(person.id);
+          return {
+            ...person,
+            reason_if_ineligible: `Ya asignado como ${otherJob} el mismo día`,
+          };
+        }
+
         return person;
       });
 

@@ -122,14 +122,28 @@ export function PersonHistoryModal({ isOpen, onClose, personId, personName }: Pe
     const infos = assignmentMap.get(dateKey) || [];
 
     const hasMonaguillo = infos.some(j => j.job_name.toLowerCase() === 'monaguillos');
+    const hasMonaguilloJr = infos.some(j => j.job_name.toLowerCase() === 'monaguillos jr.');
     const hasLector = infos.some(j => j.job_name.toLowerCase() === 'lectores');
 
-    if (hasMonaguillo && hasLector) {
-      return {
-        background: 'linear-gradient(135deg, #3B82F6 50%, #10B981 50%)',
-      };
+    // Count how many services
+    const services = [hasMonaguillo, hasMonaguilloJr, hasLector].filter(Boolean).length;
+
+    if (services >= 2) {
+      // Multiple services - create gradient
+      const colors = [];
+      if (hasMonaguillo) colors.push('#3B82F6');
+      if (hasMonaguilloJr) colors.push('#8B5CF6');
+      if (hasLector) colors.push('#10B981');
+
+      if (colors.length === 2) {
+        return { background: `linear-gradient(135deg, ${colors[0]} 50%, ${colors[1]} 50%)` };
+      } else {
+        return { background: `linear-gradient(135deg, ${colors[0]} 33%, ${colors[1]} 33%, ${colors[1]} 66%, ${colors[2]} 66%)` };
+      }
     } else if (hasMonaguillo) {
       return { backgroundColor: '#3B82F6' };
+    } else if (hasMonaguilloJr) {
+      return { backgroundColor: '#8B5CF6' };
     } else if (hasLector) {
       return { backgroundColor: '#10B981' };
     } else {
@@ -159,28 +173,33 @@ export function PersonHistoryModal({ isOpen, onClose, personId, personName }: Pe
     if (infos.length === 0) return null;
 
     const monaguillo = infos.find(j => j.job_name.toLowerCase() === 'monaguillos');
+    const monaguilloJr = infos.find(j => j.job_name.toLowerCase() === 'monaguillos jr.');
     const lector = infos.find(j => j.job_name.toLowerCase() === 'lectores');
 
-    if (monaguillo && lector) {
-      // Both - show split with number and icon
-      return (
-        <div className="flex items-center justify-center w-full h-full">
-          <span className="text-white text-xs font-bold">{monaguillo.position || ''}</span>
-          <span className="text-white ml-0.5">{getLectorIcon(lector.position)}</span>
-        </div>
-      );
-    } else if (monaguillo) {
-      // Show number for monaguillo
-      return (
-        <span className="text-white text-sm font-bold">{monaguillo.position || ''}</span>
-      );
-    } else if (lector) {
-      // Show icon for lector
-      return (
-        <span className="text-white">{getLectorIcon(lector.position)}</span>
-      );
+    const elements: React.ReactNode[] = [];
+
+    if (monaguillo) {
+      elements.push(<span key="mon" className="text-white text-xs font-bold">{monaguillo.position || ''}</span>);
     }
-    return null;
+    if (monaguilloJr) {
+      elements.push(<span key="monjr" className="text-white text-xs font-bold">J{monaguilloJr.position || ''}</span>);
+    }
+    if (lector) {
+      elements.push(<span key="lec" className="text-white">{getLectorIcon(lector.position)}</span>);
+    }
+
+    if (elements.length === 0) return null;
+
+    if (elements.length === 1) {
+      return elements[0];
+    }
+
+    // Multiple elements - show them compactly
+    return (
+      <div className="flex items-center justify-center w-full h-full gap-0.5">
+        {elements}
+      </div>
+    );
   };
 
   // Count statistics
@@ -188,6 +207,7 @@ export function PersonHistoryModal({ isOpen, onClose, personId, personName }: Pe
     total: totalSundays,
     served: assignmentMap.size,
     monaguillo: assignments.filter(a => a.job_name.toLowerCase() === 'monaguillos').length,
+    monaguilloJr: assignments.filter(a => a.job_name.toLowerCase() === 'monaguillos jr.').length,
     lector: assignments.filter(a => a.job_name.toLowerCase() === 'lectores').length,
   };
 
@@ -252,12 +272,12 @@ export function PersonHistoryModal({ isOpen, onClose, personId, personName }: Pe
               <span>Monaguillo (1-4)</span>
             </div>
             <div className="flex items-center space-x-1">
-              <div className="w-5 h-5 rounded flex items-center justify-center text-white" style={{ backgroundColor: '#10B981' }}><Eye className="w-3 h-3" /></div>
-              <span>Lector</span>
+              <div className="w-5 h-5 rounded flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: '#8B5CF6' }}>J1</div>
+              <span>Mon. Jr. (1-2)</span>
             </div>
             <div className="flex items-center space-x-1">
-              <div className="w-5 h-5 rounded flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #3B82F6 50%, #10B981 50%)' }} />
-              <span>Ambos</span>
+              <div className="w-5 h-5 rounded flex items-center justify-center text-white" style={{ backgroundColor: '#10B981' }}><Eye className="w-3 h-3" /></div>
+              <span>Lector</span>
             </div>
             <div className="flex items-center space-x-1">
               <div className="w-5 h-5 rounded border border-gray-300 bg-gray-100" />
@@ -287,7 +307,7 @@ export function PersonHistoryModal({ isOpen, onClose, personId, personName }: Pe
         </div>
 
         {/* Statistics */}
-        <div className="grid grid-cols-4 gap-2 text-center text-sm bg-gray-50 p-3 rounded-lg">
+        <div className="grid grid-cols-5 gap-2 text-center text-sm bg-gray-50 p-3 rounded-lg">
           <div>
             <div className="font-medium text-gray-900">{stats.total}</div>
             <div className="text-gray-500">Domingos</div>
@@ -299,6 +319,10 @@ export function PersonHistoryModal({ isOpen, onClose, personId, personName }: Pe
           <div>
             <div className="font-medium text-blue-600">{stats.monaguillo}</div>
             <div className="text-gray-500">Monaguillo</div>
+          </div>
+          <div>
+            <div className="font-medium text-purple-600">{stats.monaguilloJr}</div>
+            <div className="text-gray-500">Mon. Jr.</div>
           </div>
           <div>
             <div className="font-medium text-green-600">{stats.lector}</div>

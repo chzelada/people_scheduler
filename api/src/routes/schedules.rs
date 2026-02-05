@@ -310,7 +310,13 @@ async fn generate_job_assignments(
 ) -> Result<Vec<AssignmentWithDetails>, String> {
     let num_positions = job.people_required as i32;
 
+    // Determine if this job should check exclusion flags
+    let job_name_lower = job.name.to_lowercase();
+    let exclude_monaguillos_check = job_name_lower == "monaguillos" || job_name_lower == "monaguillos jr";
+    let exclude_lectores_check = job_name_lower == "lectores";
+
     // Get candidates: active people qualified for this job and available on this date
+    // Also filter out people with exclusion flags for this job type
     let all_candidates = sqlx::query_as::<_, CandidatePerson>(
         r#"
         SELECT DISTINCT p.id, p.first_name, p.last_name
@@ -323,13 +329,25 @@ async fn generate_job_assignments(
               WHERE u.person_id = p.id
                 AND $2 BETWEEN u.start_date AND u.end_date
           )
+          AND (NOT $3 OR p.exclude_monaguillos = false)
+          AND (NOT $4 OR p.exclude_lectores = false)
         "#,
     )
     .bind(&job.id)
     .bind(&service_date.service_date)
+    .bind(exclude_monaguillos_check)
+    .bind(exclude_lectores_check)
     .fetch_all(pool)
     .await
     .map_err(|e| e.to_string())?;
+
+    tracing::info!(
+        "Candidates for {} after exclusion filter: {} (exclude_monaguillos_check={}, exclude_lectores_check={})",
+        job.name,
+        all_candidates.len(),
+        exclude_monaguillos_check,
+        exclude_lectores_check
+    );
 
     // Filter out candidates already assigned to an exclusive job
     let mut candidates: Vec<CandidatePerson> = all_candidates
@@ -347,7 +365,9 @@ async fn generate_job_assignments(
         .collect();
 
     // Apply consecutive month restriction for monaguillos and lectores
-    // Rule: Cannot serve in same role two consecutive months, UNLESS current month has 5 Sundays
+    // Rule: Cannot serve in SAME role two consecutive months, UNLESS current month has 5 Sundays
+    // Note: A person CAN serve as Monaguillo in April AND Lector in April (same month, different days)
+    //       But if they served as Monaguillo in March, they cannot be Monaguillo in April
     if has_consecutive_month_restriction(&job.name) {
         let current_month = service_date.service_date.month();
         let current_year = service_date.service_date.year();
@@ -362,7 +382,7 @@ async fn generate_job_assignments(
                 (current_year, current_month - 1)
             };
 
-            // Get list of people who served in this job last month
+            // Get list of people who served in THIS SAME job last month
             let served_last_month: Vec<String> = sqlx::query_scalar(
                 r#"
                 SELECT DISTINCT person_id
@@ -379,18 +399,28 @@ async fn generate_job_assignments(
             .await
             .map_err(|e| e.to_string())?;
 
-            // Filter out those who served last month
+            let candidates_before = candidates.len();
+
+            // Simply filter out those who served in this same job last month
             candidates.retain(|c| !served_last_month.contains(&c.id));
 
             tracing::info!(
-                "Consecutive month filter for {}: {} served last month, {} candidates remaining",
+                "Consecutive month filter for {}: {} total, {} served last month in same role, {} available",
                 job.name,
+                candidates_before,
                 served_last_month.len(),
                 candidates.len()
             );
+
+            if candidates.is_empty() {
+                tracing::warn!(
+                    "No candidates available for {} after consecutive month filter!",
+                    job.name
+                );
+            }
         } else {
             tracing::info!(
-                "Skipping consecutive month restriction for {} - month has {} Sundays",
+                "Skipping consecutive month restriction for {} - month has {} Sundays (>4)",
                 job.name,
                 sundays_this_month
             );
@@ -400,37 +430,54 @@ async fn generate_job_assignments(
     // Filter out people who have already been assigned to this job this month
     // (limit to 1 assignment per job per month, unless not enough candidates)
     let candidates_before_monthly = candidates.len();
-    let candidates_without_monthly: Vec<CandidatePerson> = candidates
+
+    // Count how many times each candidate has been assigned to this job this month
+    let mut candidates_with_counts: Vec<(CandidatePerson, usize)> = candidates
         .iter()
-        .filter(|c| {
-            if let Some(jobs_assigned) = assigned_this_month.get(&c.id) {
-                !jobs_assigned.contains(&job.id)
+        .map(|c| {
+            let count = if let Some(jobs_assigned) = assigned_this_month.get(&c.id) {
+                jobs_assigned.iter().filter(|j| *j == &job.id).count()
             } else {
-                true
-            }
+                0
+            };
+            (c.clone(), count)
         })
-        .cloned()
         .collect();
 
-    // If we don't have enough candidates after monthly filter, fall back to all candidates
-    // (this allows people to serve multiple times if necessary)
+    // Sort by assignment count (ascending) - prefer those who haven't served yet
+    candidates_with_counts.sort_by_key(|(_, count)| *count);
+
+    // Get candidates who haven't served this job this month
+    let candidates_without_monthly: Vec<CandidatePerson> = candidates_with_counts
+        .iter()
+        .filter(|(_, count)| *count == 0)
+        .map(|(c, _)| c.clone())
+        .collect();
+
+    // If we have enough candidates who haven't served yet, use only those
     if candidates_without_monthly.len() >= job.people_required as usize {
         tracing::info!(
-            "Monthly limit filter for {}: {} -> {} candidates (filtered {} who already served this month)",
+            "Monthly limit filter for {}: {} -> {} candidates (using only those who haven't served this month)",
             job.name,
             candidates_before_monthly,
-            candidates_without_monthly.len(),
-            candidates_before_monthly - candidates_without_monthly.len()
+            candidates_without_monthly.len()
         );
         candidates = candidates_without_monthly;
     } else {
+        // Not enough fresh candidates - need to reuse some
+        // Take the people with fewest assignments first
         tracing::warn!(
-            "Not enough candidates for {} after monthly filter ({} needed, {} available). Using all {} candidates.",
+            "Not enough fresh candidates for {} ({} fresh, {} needed). Will prioritize those with fewer assignments.",
             job.name,
-            job.people_required,
             candidates_without_monthly.len(),
-            candidates.len()
+            job.people_required
         );
+
+        // Rebuild candidates list prioritized by fewest assignments this month
+        candidates = candidates_with_counts
+            .into_iter()
+            .map(|(c, _)| c)
+            .collect();
     }
 
     if candidates.is_empty() {
@@ -455,12 +502,38 @@ async fn generate_job_assignments(
     // Sort by fewest assignments (fairness)
     person_scores.sort_by_key(|(_, count)| *count);
 
+    // Log all candidates with their scores
+    tracing::info!(
+        "Candidates for {} on {}: {} total",
+        job.name,
+        service_date.service_date,
+        person_scores.len()
+    );
+    for (p, count) in &person_scores {
+        tracing::debug!(
+            "  - {} {} (assignments this year: {})",
+            p.first_name,
+            p.last_name,
+            count
+        );
+    }
+
     // Select top N people
     let selected: Vec<CandidatePerson> = person_scores
         .into_iter()
         .take(num_positions as usize)
         .map(|(p, _)| p)
         .collect();
+
+    // Log selected candidates
+    tracing::info!(
+        "Selected {} of {} required for {} on {}: [{}]",
+        selected.len(),
+        num_positions,
+        job.name,
+        service_date.service_date,
+        selected.iter().map(|p| format!("{} {}", p.first_name, p.last_name)).collect::<Vec<_>>().join(", ")
+    );
 
     // Build position bags for rotation algorithm
     let mut person_bags: HashMap<String, Vec<i32>> = HashMap::new();
@@ -606,6 +679,25 @@ async fn generate_job_assignments(
             assigned_positions.push(pos);
             assigned_people.push(person_id);
         }
+    }
+
+    // Log final results
+    if assignments.len() < num_positions as usize {
+        tracing::warn!(
+            "INCOMPLETE: Only {} of {} {} assignments created for {}. Selected had {} people.",
+            assignments.len(),
+            num_positions,
+            job.name,
+            service_date.service_date,
+            selected.len()
+        );
+    } else {
+        tracing::info!(
+            "Created {} {} assignments for {}",
+            assignments.len(),
+            job.name,
+            service_date.service_date
+        );
     }
 
     Ok(assignments)

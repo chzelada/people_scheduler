@@ -8,7 +8,7 @@ Disponible como:
 
 ## Funcionalidades
 
-- **Gestión de Voluntarios**: Agregar, editar y gestionar voluntarios con información de contacto
+- **Gestión de Voluntarios**: Agregar, editar y gestionar voluntarios con información de contacto y foto de perfil
 - **Autenticación**: Sistema de login con roles (admin y servidor)
 - **Asignación de Servicios**: Asignar voluntarios a diferentes roles (Monaguillos, Lectores)
 - **Sub-posiciones por Servicio**:

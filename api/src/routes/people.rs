@@ -6,8 +6,8 @@ use axum::{
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::auth::hash_password;
-use crate::models::{CreatePerson, Person, PersonWithCredentials, PersonWithJobs, UpdatePerson};
+use crate::auth::{hash_password, Claims};
+use crate::models::{CreatePerson, Person, PersonWithCredentials, PersonWithJobs, UpdatePerson, UploadPhotoRequest};
 
 // Generate a random password (8 characters, alphanumeric)
 fn generate_random_password() -> String {
@@ -35,7 +35,10 @@ async fn generate_username(
     let last_normalized = normalize_name(last_name);
 
     if first_normalized.is_empty() || last_normalized.is_empty() {
-        return Err((StatusCode::BAD_REQUEST, "Invalid name for username generation".to_string()));
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "Invalid name for username generation".to_string(),
+        ));
     }
 
     // Try: first letter + last name
@@ -51,11 +54,7 @@ async fn generate_username(
 
     // Try: first two letters + last name
     if first_normalized.len() >= 2 {
-        let username_two = format!(
-            "{}{}",
-            &first_normalized[..2],
-            last_normalized
-        );
+        let username_two = format!("{}{}", &first_normalized[..2], last_normalized);
         if !username_exists(pool, &username_two).await? {
             return Ok(username_two);
         }
@@ -69,18 +68,20 @@ async fn generate_username(
         }
     }
 
-    Err((StatusCode::CONFLICT, "Could not generate unique username".to_string()))
+    Err((
+        StatusCode::CONFLICT,
+        "Could not generate unique username".to_string(),
+    ))
 }
 
 // Check if username exists in users table
 async fn username_exists(pool: &PgPool, username: &str) -> Result<bool, (StatusCode, String)> {
-    let exists = sqlx::query_scalar::<_, bool>(
-        "SELECT EXISTS(SELECT 1 FROM users WHERE username = $1)"
-    )
-    .bind(username)
-    .fetch_one(pool)
-    .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let exists =
+        sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM users WHERE username = $1)")
+            .bind(username)
+            .fetch_one(pool)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok(exists)
 }
@@ -102,14 +103,16 @@ fn normalize_name(name: &str) -> String {
 }
 
 // Get username for a person (from linked user)
-async fn get_username_for_person(pool: &PgPool, person_id: &str) -> Result<Option<String>, (StatusCode, String)> {
-    let username = sqlx::query_scalar::<_, String>(
-        "SELECT username FROM users WHERE person_id = $1"
-    )
-    .bind(person_id)
-    .fetch_optional(pool)
-    .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+async fn get_username_for_person(
+    pool: &PgPool,
+    person_id: &str,
+) -> Result<Option<String>, (StatusCode, String)> {
+    let username =
+        sqlx::query_scalar::<_, String>("SELECT username FROM users WHERE person_id = $1")
+            .bind(person_id)
+            .fetch_optional(pool)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok(username)
 }
@@ -118,21 +121,23 @@ pub async fn get_all(
     State(pool): State<PgPool>,
 ) -> Result<Json<Vec<PersonWithJobs>>, (StatusCode, String)> {
     let people = sqlx::query_as::<_, Person>(
-        "SELECT * FROM people ORDER BY last_name, first_name"
+        r#"SELECT id, first_name, last_name, email, phone, preferred_frequency,
+                  max_consecutive_weeks, preference_level, active, notes,
+                  created_at, updated_at, exclude_monaguillos, exclude_lectores, photo_url
+           FROM people ORDER BY last_name, first_name"#
     )
-    .fetch_all(&pool)
-    .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-
-    let mut result = Vec::new();
-    for person in people {
-        let job_ids: Vec<String> = sqlx::query_scalar(
-            "SELECT job_id FROM person_jobs WHERE person_id = $1"
-        )
-        .bind(&person.id)
         .fetch_all(&pool)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let mut result = Vec::new();
+    for person in people {
+        let job_ids: Vec<String> =
+            sqlx::query_scalar("SELECT job_id FROM person_jobs WHERE person_id = $1")
+                .bind(&person.id)
+                .fetch_all(&pool)
+                .await
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
         let username = get_username_for_person(&pool, &person.id).await?;
 
@@ -151,25 +156,31 @@ pub async fn get_by_id(
     Path(id): Path<String>,
 ) -> Result<Json<PersonWithJobs>, (StatusCode, String)> {
     let person = sqlx::query_as::<_, Person>(
-        "SELECT * FROM people WHERE id = $1"
+        r#"SELECT id, first_name, last_name, email, phone, preferred_frequency,
+                  max_consecutive_weeks, preference_level, active, notes,
+                  created_at, updated_at, exclude_monaguillos, exclude_lectores, photo_url
+           FROM people WHERE id = $1"#
     )
-    .bind(&id)
-    .fetch_optional(&pool)
-    .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
-    .ok_or((StatusCode::NOT_FOUND, "Person not found".to_string()))?;
+        .bind(&id)
+        .fetch_optional(&pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or((StatusCode::NOT_FOUND, "Person not found".to_string()))?;
 
-    let job_ids: Vec<String> = sqlx::query_scalar(
-        "SELECT job_id FROM person_jobs WHERE person_id = $1"
-    )
-    .bind(&id)
-    .fetch_all(&pool)
-    .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let job_ids: Vec<String> =
+        sqlx::query_scalar("SELECT job_id FROM person_jobs WHERE person_id = $1")
+            .bind(&id)
+            .fetch_all(&pool)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     let username = get_username_for_person(&pool, &id).await?;
 
-    Ok(Json(PersonWithJobs { person, job_ids, username }))
+    Ok(Json(PersonWithJobs {
+        person,
+        job_ids,
+        username,
+    }))
 }
 
 pub async fn create(
@@ -201,15 +212,13 @@ pub async fn create(
     // Insert person_jobs
     for job_id in &input.job_ids {
         let pj_id = Uuid::new_v4().to_string();
-        sqlx::query(
-            "INSERT INTO person_jobs (id, person_id, job_id) VALUES ($1, $2, $3)"
-        )
-        .bind(&pj_id)
-        .bind(&id)
-        .bind(job_id)
-        .execute(&pool)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        sqlx::query("INSERT INTO person_jobs (id, person_id, job_id) VALUES ($1, $2, $3)")
+            .bind(&pj_id)
+            .bind(&id)
+            .bind(job_id)
+            .execute(&pool)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     }
 
     // Generate username and password for servidor login
@@ -282,6 +291,14 @@ pub async fn update(
         updates.push(format!("notes = ${}", param_count));
         param_count += 1;
     }
+    if input.exclude_monaguillos.is_some() {
+        updates.push(format!("exclude_monaguillos = ${}", param_count));
+        param_count += 1;
+    }
+    if input.exclude_lectores.is_some() {
+        updates.push(format!("exclude_lectores = ${}", param_count));
+        param_count += 1;
+    }
 
     if !updates.is_empty() {
         let query = format!(
@@ -292,15 +309,39 @@ pub async fn update(
 
         let mut q = sqlx::query_as::<_, Person>(&query);
 
-        if let Some(ref v) = input.first_name { q = q.bind(v); }
-        if let Some(ref v) = input.last_name { q = q.bind(v); }
-        if let Some(ref v) = input.email { q = q.bind(v); }
-        if let Some(ref v) = input.phone { q = q.bind(v); }
-        if let Some(ref v) = input.preferred_frequency { q = q.bind(v); }
-        if let Some(ref v) = input.max_consecutive_weeks { q = q.bind(v); }
-        if let Some(ref v) = input.preference_level { q = q.bind(v); }
-        if let Some(ref v) = input.active { q = q.bind(v); }
-        if let Some(ref v) = input.notes { q = q.bind(v); }
+        if let Some(ref v) = input.first_name {
+            q = q.bind(v);
+        }
+        if let Some(ref v) = input.last_name {
+            q = q.bind(v);
+        }
+        if let Some(ref v) = input.email {
+            q = q.bind(v);
+        }
+        if let Some(ref v) = input.phone {
+            q = q.bind(v);
+        }
+        if let Some(ref v) = input.preferred_frequency {
+            q = q.bind(v);
+        }
+        if let Some(ref v) = input.max_consecutive_weeks {
+            q = q.bind(v);
+        }
+        if let Some(ref v) = input.preference_level {
+            q = q.bind(v);
+        }
+        if let Some(ref v) = input.active {
+            q = q.bind(v);
+        }
+        if let Some(ref v) = input.notes {
+            q = q.bind(v);
+        }
+        if let Some(ref v) = input.exclude_monaguillos {
+            q = q.bind(v);
+        }
+        if let Some(ref v) = input.exclude_lectores {
+            q = q.bind(v);
+        }
         q = q.bind(&id);
 
         q.fetch_one(&pool)
@@ -320,15 +361,13 @@ pub async fn update(
         // Insert new
         for job_id in job_ids {
             let pj_id = Uuid::new_v4().to_string();
-            sqlx::query(
-                "INSERT INTO person_jobs (id, person_id, job_id) VALUES ($1, $2, $3)"
-            )
-            .bind(&pj_id)
-            .bind(&id)
-            .bind(job_id)
-            .execute(&pool)
-            .await
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            sqlx::query("INSERT INTO person_jobs (id, person_id, job_id) VALUES ($1, $2, $3)")
+                .bind(&pj_id)
+                .bind(&id)
+                .bind(job_id)
+                .execute(&pool)
+                .await
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
         }
     }
 
@@ -367,25 +406,30 @@ pub async fn create_user_account(
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     // Check person exists
     let person = sqlx::query_as::<_, Person>(
-        "SELECT * FROM people WHERE id = $1"
+        r#"SELECT id, first_name, last_name, email, phone, preferred_frequency,
+                  max_consecutive_weeks, preference_level, active, notes,
+                  created_at, updated_at, exclude_monaguillos, exclude_lectores, photo_url
+           FROM people WHERE id = $1"#
     )
-    .bind(&person_id)
-    .fetch_optional(&pool)
-    .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
-    .ok_or((StatusCode::NOT_FOUND, "Person not found".to_string()))?;
+        .bind(&person_id)
+        .fetch_optional(&pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or((StatusCode::NOT_FOUND, "Person not found".to_string()))?;
 
     // Check if user account already exists
-    let existing_user = sqlx::query_scalar::<_, bool>(
-        "SELECT EXISTS(SELECT 1 FROM users WHERE person_id = $1)"
-    )
-    .bind(&person_id)
-    .fetch_one(&pool)
-    .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let existing_user =
+        sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM users WHERE person_id = $1)")
+            .bind(&person_id)
+            .fetch_one(&pool)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     if existing_user {
-        return Err((StatusCode::CONFLICT, "User account already exists for this person".to_string()));
+        return Err((
+            StatusCode::CONFLICT,
+            "User account already exists for this person".to_string(),
+        ));
     }
 
     // Generate username and password
@@ -417,13 +461,11 @@ pub async fn reset_password(
     Path(person_id): Path<String>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     // Check person exists
-    let exists = sqlx::query_scalar::<_, bool>(
-        "SELECT EXISTS(SELECT 1 FROM people WHERE id = $1)"
-    )
-    .bind(&person_id)
-    .fetch_one(&pool)
-    .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let exists = sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM people WHERE id = $1)")
+        .bind(&person_id)
+        .fetch_one(&pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     if !exists {
         return Err((StatusCode::NOT_FOUND, "Person not found".to_string()));
@@ -436,7 +478,7 @@ pub async fn reset_password(
 
     // Update user's password
     let result = sqlx::query(
-        "UPDATE users SET password_hash = $1, updated_at = CURRENT_TIMESTAMP WHERE person_id = $2"
+        "UPDATE users SET password_hash = $1, updated_at = CURRENT_TIMESTAMP WHERE person_id = $2",
     )
     .bind(&password_hash)
     .bind(&person_id)
@@ -445,11 +487,157 @@ pub async fn reset_password(
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     if result.rows_affected() == 0 {
-        return Err((StatusCode::NOT_FOUND, "User not found for this person".to_string()));
+        return Err((
+            StatusCode::NOT_FOUND,
+            "User not found for this person".to_string(),
+        ));
     }
 
     Ok(Json(serde_json::json!({
         "message": "Password reset successfully",
         "new_password": new_password
     })))
+}
+
+// Validate photo data URI
+fn validate_photo_data(photo_data: &str) -> Result<(), (StatusCode, String)> {
+    // Check format: data:image/TYPE;base64,DATA
+    if !photo_data.starts_with("data:image/") {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "Invalid photo format. Must be a data URI".to_string(),
+        ));
+    }
+
+    // Extract MIME type
+    let mime_end = photo_data.find(';').ok_or((
+        StatusCode::BAD_REQUEST,
+        "Invalid data URI format".to_string(),
+    ))?;
+    let mime_type = &photo_data[5..mime_end]; // Skip "data:"
+
+    // Only allow jpeg, png, webp
+    let allowed_types = ["image/jpeg", "image/png", "image/webp"];
+    if !allowed_types.contains(&mime_type) {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            format!("Invalid image type: {}. Allowed: jpeg, png, webp", mime_type),
+        ));
+    }
+
+    // Check size (100KB limit for base64 data)
+    // Base64 encoding increases size by ~33%, so 100KB binary = ~137KB base64
+    const MAX_SIZE: usize = 150_000; // ~100KB after decoding
+    if photo_data.len() > MAX_SIZE {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "Photo too large. Maximum size is 100KB".to_string(),
+        ));
+    }
+
+    Ok(())
+}
+
+// Admin: Upload photo for any person
+pub async fn upload_photo(
+    State(pool): State<PgPool>,
+    Path(person_id): Path<String>,
+    Json(input): Json<UploadPhotoRequest>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    // Validate photo data
+    validate_photo_data(&input.photo_data)?;
+
+    // Check person exists
+    let exists = sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM people WHERE id = $1)")
+        .bind(&person_id)
+        .fetch_one(&pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    if !exists {
+        return Err((StatusCode::NOT_FOUND, "Person not found".to_string()));
+    }
+
+    // Update photo
+    sqlx::query("UPDATE people SET photo_url = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2")
+        .bind(&input.photo_data)
+        .bind(&person_id)
+        .execute(&pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(Json(serde_json::json!({ "message": "Photo uploaded successfully" })))
+}
+
+// Admin: Delete photo for any person
+pub async fn delete_photo(
+    State(pool): State<PgPool>,
+    Path(person_id): Path<String>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    // Check person exists
+    let exists = sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM people WHERE id = $1)")
+        .bind(&person_id)
+        .fetch_one(&pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    if !exists {
+        return Err((StatusCode::NOT_FOUND, "Person not found".to_string()));
+    }
+
+    // Clear photo
+    sqlx::query("UPDATE people SET photo_url = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = $1")
+        .bind(&person_id)
+        .execute(&pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(Json(serde_json::json!({ "message": "Photo deleted successfully" })))
+}
+
+// Servidor: Upload own photo
+pub async fn upload_my_photo(
+    State(pool): State<PgPool>,
+    claims: Claims,
+    Json(input): Json<UploadPhotoRequest>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    // Get person_id from claims
+    let person_id = claims.person_id.ok_or((
+        StatusCode::FORBIDDEN,
+        "No linked person account".to_string(),
+    ))?;
+
+    // Validate photo data
+    validate_photo_data(&input.photo_data)?;
+
+    // Update photo
+    sqlx::query("UPDATE people SET photo_url = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2")
+        .bind(&input.photo_data)
+        .bind(&person_id)
+        .execute(&pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(Json(serde_json::json!({ "message": "Photo uploaded successfully" })))
+}
+
+// Servidor: Delete own photo
+pub async fn delete_my_photo(
+    State(pool): State<PgPool>,
+    claims: Claims,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    // Get person_id from claims
+    let person_id = claims.person_id.ok_or((
+        StatusCode::FORBIDDEN,
+        "No linked person account".to_string(),
+    ))?;
+
+    // Clear photo
+    sqlx::query("UPDATE people SET photo_url = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = $1")
+        .bind(&person_id)
+        .execute(&pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(Json(serde_json::json!({ "message": "Photo deleted successfully" })))
 }

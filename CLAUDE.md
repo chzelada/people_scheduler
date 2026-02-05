@@ -95,7 +95,7 @@ VITE_API_URL=https://your-api-gateway.execute-api.region.amazonaws.com
 
 ### Core Tables
 - `users` - System users (admin/servidor roles) with JWT auth
-- `people` - Volunteer information with job qualifications and exclusion flags
+- `people` - Volunteer information with job qualifications, exclusion flags, and profile photo (Base64)
 - `jobs` - Service types (Monaguillos, Monaguillos Jr., Lectores)
 - `job_positions` - Sub-positions per job (e.g., Pos 1-4 for Monaguillos, Monitor/Primera/Salmo/Segunda for Lectores)
 - `person_jobs` - Many-to-many mapping of people to qualified jobs
@@ -146,13 +146,20 @@ Auto-created on first run:
 - **Job exclusions**: People can be excluded from specific jobs via boolean flags (`exclude_monaguillos`, `exclude_lectores`)
 
 ### User Roles
-- **Admin**: Full access to all features (user management, scheduling, configuration)
-- **Servidor**: Read-only view of own assignments, can manage own unavailability
+- **Admin**: Full access to all features (user management, scheduling, configuration, manage anyone's photo)
+- **Servidor**: Read-only view of own assignments, can manage own unavailability and profile photo
 
 ### Volunteer Lifecycle
 - When creating a new person, auto-generates username and password for servidor role
 - Username format: `firstname.lastname` (lowercased, special chars removed)
 - Password: random 8-char alphanumeric shown once at creation
+
+### Profile Photos
+- Stored as Base64 data URIs in PostgreSQL (`photo_url` column)
+- Frontend resizes/crops to 200x200px JPEG 80% quality before upload
+- Backend validates: max 100KB, valid data URI format, image MIME types only
+- Components: `Avatar.tsx` (display), `PhotoUpload.tsx` (upload UI), `ImageCropModal.tsx` (crop/zoom)
+- Endpoints: `POST/DELETE /api/people/{id}/photo` (admin), `POST/DELETE /api/my-photo` (servidor)
 
 ## API Endpoints Pattern
 

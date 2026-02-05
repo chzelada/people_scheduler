@@ -130,7 +130,8 @@ CREATE TABLE IF NOT EXISTS assignment_history (
 -- Insert default jobs
 INSERT INTO jobs (id, name, description, people_required, color) VALUES
     ('monaguillos', 'Monaguillos', 'Altar servers', 4, '#3B82F6'),
-    ('lectores', 'Lectores', 'Scripture readers', 4, '#10B981')
+    ('lectores', 'Lectores', 'Scripture readers', 4, '#10B981'),
+    ('monaguillos_jr', 'Monaguillos Jr.', 'Monaguillos Junior', 2, '#8B5CF6')
 ON CONFLICT (id) DO NOTHING;
 
 -- Insert positions for Monaguillos

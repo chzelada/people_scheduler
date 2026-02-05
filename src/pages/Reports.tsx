@@ -66,6 +66,15 @@ export function Reports() {
               </span>
             </div>
             <div className="flex justify-between items-center py-2 border-b border-gray-100">
+              <span className="text-gray-600">Total Monaguillos Jr. ({selectedYear})</span>
+              <span className="inline-flex items-center px-2 py-0.5 rounded text-sm font-medium bg-purple-100 text-purple-800">
+                {fairnessScores.reduce((sum, s) => {
+                  const job = s.assignments_by_job?.find(j => j.job_name.toLowerCase() === 'monaguillos jr.');
+                  return sum + (job?.count || 0);
+                }, 0)}
+              </span>
+            </div>
+            <div className="flex justify-between items-center py-2 border-b border-gray-100">
               <span className="text-gray-600">Total Lectores ({selectedYear})</span>
               <span className="inline-flex items-center px-2 py-0.5 rounded text-sm font-medium bg-green-100 text-green-800">
                 {fairnessScores.reduce((sum, s) => {

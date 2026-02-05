@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Key, UserPlus } from 'lucide-react';
-import { Button, Input, Select, Textarea } from '../common';
+import { Button, Input, Select, Textarea, PhotoUpload } from '../common';
 import type { Person, CreatePersonRequest, UpdatePersonRequest, Job } from '../../types';
 
 interface PersonFormProps {
@@ -10,10 +10,12 @@ interface PersonFormProps {
   onCancel: () => void;
   onResetPassword?: (person: Person) => void;
   onCreateUser?: (person: Person) => void;
+  onUploadPhoto?: (personId: string, photoData: string) => Promise<void>;
+  onDeletePhoto?: (personId: string) => Promise<void>;
   isLoading?: boolean;
 }
 
-export function PersonForm({ person, jobs, onSubmit, onCancel, onResetPassword, onCreateUser, isLoading }: PersonFormProps) {
+export function PersonForm({ person, jobs, onSubmit, onCancel, onResetPassword, onCreateUser, onUploadPhoto, onDeletePhoto, isLoading }: PersonFormProps) {
   const [formData, setFormData] = useState<{
     first_name: string;
     last_name: string;
@@ -162,6 +164,23 @@ export function PersonForm({ person, jobs, onSubmit, onCancel, onResetPassword, 
         onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
         rows={3}
       />
+
+      {/* Photo section - only for editing existing person */}
+      {person && onUploadPhoto && onDeletePhoto && (
+        <div className="border-t border-gray-200 pt-4 mt-4">
+          <label className="block text-sm font-medium text-gray-700 mb-3">
+            Foto de Perfil
+          </label>
+          <PhotoUpload
+            photoUrl={person.photo_url}
+            firstName={person.first_name}
+            lastName={person.last_name}
+            onUpload={(photoData) => onUploadPhoto(person.id, photoData)}
+            onDelete={() => onDeletePhoto(person.id)}
+            disabled={isLoading}
+          />
+        </div>
+      )}
 
       {/* Account management section - only for editing existing person */}
       {person && (

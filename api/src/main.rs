@@ -4,7 +4,7 @@
 //! Or: cargo watch -x 'run --bin api'
 
 use dotenvy::dotenv;
-use people_scheduler_api::{create_app, db};
+use people_scheduler_api::{create_app, db, init_database};
 use std::net::SocketAddr;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -27,6 +27,12 @@ async fn main() {
         .expect("Failed to create database pool");
 
     tracing::info!("Connected to database");
+
+    // Run migrations
+    init_database(&pool)
+        .await
+        .expect("Failed to initialize database");
+    tracing::info!("Database initialized");
 
     // Create app
     let app = create_app(pool);
