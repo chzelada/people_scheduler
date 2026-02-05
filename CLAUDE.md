@@ -161,6 +161,13 @@ Auto-created on first run:
 - Components: `Avatar.tsx` (display), `PhotoUpload.tsx` (upload UI), `ImageCropModal.tsx` (crop/zoom)
 - Endpoints: `POST/DELETE /api/people/{id}/photo` (admin), `POST/DELETE /api/my-photo` (servidor)
 
+### Person Detail Modal
+- Click on server name in PeopleManagement list to view profile card
+- Shows: photo, name, age, birthday, last/next service dates, contact info, job badges
+- Loads assignment history dynamically via `/api/reports/person/{id}/history`
+- Components: `PersonDetailModal.tsx` (modal), uses `Avatar.tsx` for photo display
+- Age calculated from `birth_date`, service dates from assignment history
+
 ## API Endpoints Pattern
 
 All protected routes under `/api/*` require JWT in Authorization header (`Bearer <token>`).
