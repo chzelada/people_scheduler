@@ -26,6 +26,11 @@ export function PersonForm({ person, jobs, onSubmit, onCancel, onResetPassword, 
     preference_level: number;
     notes: string;
     job_ids: string[];
+    birth_date: string;
+    first_communion: boolean;
+    parent_name: string;
+    address: string;
+    photo_consent: boolean;
   }>({
     first_name: '',
     last_name: '',
@@ -36,6 +41,11 @@ export function PersonForm({ person, jobs, onSubmit, onCancel, onResetPassword, 
     preference_level: 5,
     notes: '',
     job_ids: [],
+    birth_date: '',
+    first_communion: false,
+    parent_name: '',
+    address: '',
+    photo_consent: false,
   });
 
   useEffect(() => {
@@ -50,16 +60,45 @@ export function PersonForm({ person, jobs, onSubmit, onCancel, onResetPassword, 
         preference_level: person.preference_level,
         notes: person.notes || '',
         job_ids: person.job_ids,
+        birth_date: person.birth_date || '',
+        first_communion: person.first_communion || false,
+        parent_name: person.parent_name || '',
+        address: person.address || '',
+        photo_consent: person.photo_consent || false,
       });
     }
   }, [person]);
 
+  // Calculate age from birth date
+  const calculateAge = (birthDate: string): number | null => {
+    if (!birthDate) return null;
+    const today = new Date();
+    const birth = new Date(birthDate);
+    let age = today.getFullYear() - birth.getFullYear();
+    const monthDiff = today.getMonth() - birth.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+      age--;
+    }
+    return age;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    // Clean up form data - convert empty strings to undefined for optional fields
+    const cleanedData = {
+      ...formData,
+      email: formData.email || undefined,
+      phone: formData.phone || undefined,
+      notes: formData.notes || undefined,
+      birth_date: formData.birth_date || undefined,
+      parent_name: formData.parent_name || undefined,
+      address: formData.address || undefined,
+    };
+
     const data = person
-      ? { id: person.id, ...formData }
-      : formData;
+      ? { id: person.id, ...cleanedData }
+      : cleanedData;
 
     await onSubmit(data);
   };
@@ -103,6 +142,77 @@ export function PersonForm({ person, jobs, onSubmit, onCancel, onResetPassword, 
           value={formData.phone}
           onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
         />
+      </div>
+
+      {/* Additional servidor information */}
+      <div className="border-t border-gray-200 pt-4 mt-4">
+        <h3 className="text-sm font-medium text-gray-700 mb-3">Información Personal</h3>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Input
+              label="Fecha de Nacimiento"
+              type="date"
+              value={formData.birth_date}
+              onChange={(e) => setFormData({ ...formData, birth_date: e.target.value })}
+            />
+            {formData.birth_date && (
+              <p className="mt-1 text-sm text-gray-500">
+                Edad: {calculateAge(formData.birth_date)} años
+              </p>
+            )}
+          </div>
+          <div className="flex items-center pt-6">
+            <label className="flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={formData.first_communion}
+                onChange={(e) => setFormData({ ...formData, first_communion: e.target.checked })}
+                className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+              />
+              <span className="ml-2 text-sm text-gray-700">Primera Comunión Completada</span>
+            </label>
+          </div>
+        </div>
+
+        <div className="mt-4">
+          <Input
+            label="Nombre del Padre/Tutor"
+            value={formData.parent_name}
+            onChange={(e) => setFormData({ ...formData, parent_name: e.target.value })}
+            placeholder="Nombre completo del padre o tutor"
+          />
+        </div>
+
+        <div className="mt-4">
+          <Textarea
+            label="Dirección"
+            value={formData.address}
+            onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+            rows={2}
+            placeholder="Dirección completa"
+          />
+        </div>
+      </div>
+
+      {/* Photo consent section */}
+      <div className="border-t border-gray-200 pt-4 mt-4">
+        <h3 className="text-sm font-medium text-gray-700 mb-3">Consentimiento de Fotografía</h3>
+        <div className="bg-gray-50 rounded-lg p-4">
+          <label className="flex items-start cursor-pointer">
+            <input
+              type="checkbox"
+              checked={formData.photo_consent}
+              onChange={(e) => setFormData({ ...formData, photo_consent: e.target.checked })}
+              className="h-4 w-4 mt-1 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+            />
+            <span className="ml-3 text-sm text-gray-700">
+              Por este medio doy mi expresa autorización para que las fotografías de las Eucaristías
+              en que participe el menor, puedan ser publicadas en las redes sociales o comunicaciones
+              internas de la Parroquia con el único propósito de dar visibilidad a las actividades pastorales.
+            </span>
+          </label>
+        </div>
       </div>
 
       <Select

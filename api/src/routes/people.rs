@@ -123,7 +123,8 @@ pub async fn get_all(
     let people = sqlx::query_as::<_, Person>(
         r#"SELECT id, first_name, last_name, email, phone, preferred_frequency,
                   max_consecutive_weeks, preference_level, active, notes,
-                  created_at, updated_at, exclude_monaguillos, exclude_lectores, photo_url
+                  created_at, updated_at, exclude_monaguillos, exclude_lectores, photo_url,
+                  birth_date, first_communion, parent_name, address, photo_consent
            FROM people ORDER BY last_name, first_name"#
     )
         .fetch_all(&pool)
@@ -158,7 +159,8 @@ pub async fn get_by_id(
     let person = sqlx::query_as::<_, Person>(
         r#"SELECT id, first_name, last_name, email, phone, preferred_frequency,
                   max_consecutive_weeks, preference_level, active, notes,
-                  created_at, updated_at, exclude_monaguillos, exclude_lectores, photo_url
+                  created_at, updated_at, exclude_monaguillos, exclude_lectores, photo_url,
+                  birth_date, first_communion, parent_name, address, photo_consent
            FROM people WHERE id = $1"#
     )
         .bind(&id)
@@ -191,8 +193,8 @@ pub async fn create(
 
     let person = sqlx::query_as::<_, Person>(
         r#"
-        INSERT INTO people (id, first_name, last_name, email, phone, preferred_frequency, max_consecutive_weeks, preference_level, notes)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        INSERT INTO people (id, first_name, last_name, email, phone, preferred_frequency, max_consecutive_weeks, preference_level, notes, birth_date, first_communion, parent_name, address, photo_consent)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
         RETURNING *
         "#
     )
@@ -205,6 +207,11 @@ pub async fn create(
     .bind(&input.max_consecutive_weeks)
     .bind(&input.preference_level)
     .bind(&input.notes)
+    .bind(&input.birth_date)
+    .bind(input.first_communion.unwrap_or(false))
+    .bind(&input.parent_name)
+    .bind(&input.address)
+    .bind(input.photo_consent.unwrap_or(false))
     .fetch_one(&pool)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -299,6 +306,26 @@ pub async fn update(
         updates.push(format!("exclude_lectores = ${}", param_count));
         param_count += 1;
     }
+    if input.birth_date.is_some() {
+        updates.push(format!("birth_date = ${}", param_count));
+        param_count += 1;
+    }
+    if input.first_communion.is_some() {
+        updates.push(format!("first_communion = ${}", param_count));
+        param_count += 1;
+    }
+    if input.parent_name.is_some() {
+        updates.push(format!("parent_name = ${}", param_count));
+        param_count += 1;
+    }
+    if input.address.is_some() {
+        updates.push(format!("address = ${}", param_count));
+        param_count += 1;
+    }
+    if input.photo_consent.is_some() {
+        updates.push(format!("photo_consent = ${}", param_count));
+        param_count += 1;
+    }
 
     if !updates.is_empty() {
         let query = format!(
@@ -340,6 +367,21 @@ pub async fn update(
             q = q.bind(v);
         }
         if let Some(ref v) = input.exclude_lectores {
+            q = q.bind(v);
+        }
+        if let Some(ref v) = input.birth_date {
+            q = q.bind(v);
+        }
+        if let Some(ref v) = input.first_communion {
+            q = q.bind(v);
+        }
+        if let Some(ref v) = input.parent_name {
+            q = q.bind(v);
+        }
+        if let Some(ref v) = input.address {
+            q = q.bind(v);
+        }
+        if let Some(ref v) = input.photo_consent {
             q = q.bind(v);
         }
         q = q.bind(&id);
@@ -408,7 +450,8 @@ pub async fn create_user_account(
     let person = sqlx::query_as::<_, Person>(
         r#"SELECT id, first_name, last_name, email, phone, preferred_frequency,
                   max_consecutive_weeks, preference_level, active, notes,
-                  created_at, updated_at, exclude_monaguillos, exclude_lectores, photo_url
+                  created_at, updated_at, exclude_monaguillos, exclude_lectores, photo_url,
+                  birth_date, first_communion, parent_name, address, photo_consent
            FROM people WHERE id = $1"#
     )
         .bind(&person_id)

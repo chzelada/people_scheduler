@@ -1,5 +1,33 @@
 use chrono::{DateTime, NaiveDate, Utc};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
+
+// Helper to deserialize empty strings as None for Option<NaiveDate>
+fn deserialize_optional_date<'de, D>(deserializer: D) -> Result<Option<NaiveDate>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let opt: Option<String> = Option::deserialize(deserializer)?;
+    match opt {
+        Some(s) if s.is_empty() => Ok(None),
+        Some(s) => NaiveDate::parse_from_str(&s, "%Y-%m-%d")
+            .map(Some)
+            .map_err(serde::de::Error::custom),
+        None => Ok(None),
+    }
+}
+
+// Helper to deserialize empty strings as None for Option<String>
+fn deserialize_optional_string<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let opt: Option<String> = Option::deserialize(deserializer)?;
+    match opt {
+        Some(s) if s.is_empty() => Ok(None),
+        Some(s) => Ok(Some(s)),
+        None => Ok(None),
+    }
+}
 
 // ============ Jobs ============
 
@@ -45,6 +73,12 @@ pub struct Person {
     pub exclude_lectores: bool,
     // Added via migration 008 - profile photo as base64 data URI
     pub photo_url: Option<String>,
+    // Added via migration 009 - additional servidor fields
+    pub birth_date: Option<NaiveDate>,
+    pub first_communion: bool,
+    pub parent_name: Option<String>,
+    pub address: Option<String>,
+    pub photo_consent: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -69,29 +103,57 @@ pub struct PersonWithCredentials {
 pub struct CreatePerson {
     pub first_name: String,
     pub last_name: String,
+    #[serde(default, deserialize_with = "deserialize_optional_string")]
     pub email: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_optional_string")]
     pub phone: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_optional_string")]
     pub preferred_frequency: Option<String>,
     pub max_consecutive_weeks: Option<i32>,
     pub preference_level: Option<i32>,
+    #[serde(default, deserialize_with = "deserialize_optional_string")]
     pub notes: Option<String>,
     pub job_ids: Vec<String>,
+    // Additional servidor fields
+    #[serde(default, deserialize_with = "deserialize_optional_date")]
+    pub birth_date: Option<NaiveDate>,
+    pub first_communion: Option<bool>,
+    #[serde(default, deserialize_with = "deserialize_optional_string")]
+    pub parent_name: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_optional_string")]
+    pub address: Option<String>,
+    pub photo_consent: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct UpdatePerson {
+    #[serde(default, deserialize_with = "deserialize_optional_string")]
     pub first_name: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_optional_string")]
     pub last_name: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_optional_string")]
     pub email: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_optional_string")]
     pub phone: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_optional_string")]
     pub preferred_frequency: Option<String>,
     pub max_consecutive_weeks: Option<i32>,
     pub preference_level: Option<i32>,
     pub active: Option<bool>,
+    #[serde(default, deserialize_with = "deserialize_optional_string")]
     pub notes: Option<String>,
     pub job_ids: Option<Vec<String>>,
     pub exclude_monaguillos: Option<bool>,
     pub exclude_lectores: Option<bool>,
+    // Additional servidor fields
+    #[serde(default, deserialize_with = "deserialize_optional_date")]
+    pub birth_date: Option<NaiveDate>,
+    pub first_communion: Option<bool>,
+    #[serde(default, deserialize_with = "deserialize_optional_string")]
+    pub parent_name: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_optional_string")]
+    pub address: Option<String>,
+    pub photo_consent: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]

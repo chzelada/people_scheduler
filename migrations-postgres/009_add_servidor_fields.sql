@@ -1,0 +1,6 @@
+-- Add additional fields for servidor (volunteer) information
+ALTER TABLE people ADD COLUMN IF NOT EXISTS birth_date DATE;
+ALTER TABLE people ADD COLUMN IF NOT EXISTS first_communion BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE people ADD COLUMN IF NOT EXISTS parent_name TEXT;
+ALTER TABLE people ADD COLUMN IF NOT EXISTS address TEXT;
+ALTER TABLE people ADD COLUMN IF NOT EXISTS photo_consent BOOLEAN NOT NULL DEFAULT FALSE;

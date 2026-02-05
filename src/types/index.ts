@@ -13,6 +13,12 @@ export interface Person {
   exclude_monaguillos: boolean;
   exclude_lectores: boolean;
   photo_url?: string;
+  // Additional servidor fields
+  birth_date?: string;
+  first_communion: boolean;
+  parent_name?: string;
+  address?: string;
+  photo_consent: boolean;
   created_at?: string;
   updated_at?: string;
   job_ids: string[];
@@ -37,6 +43,12 @@ export interface CreatePersonRequest {
   preference_level?: number;
   notes?: string;
   job_ids: string[];
+  // Additional servidor fields
+  birth_date?: string;
+  first_communion?: boolean;
+  parent_name?: string;
+  address?: string;
+  photo_consent?: boolean;
 }
 
 export interface UpdatePersonRequest {
@@ -53,6 +65,12 @@ export interface UpdatePersonRequest {
   job_ids?: string[];
   exclude_monaguillos?: boolean;
   exclude_lectores?: boolean;
+  // Additional servidor fields
+  birth_date?: string;
+  first_communion?: boolean;
+  parent_name?: string;
+  address?: string;
+  photo_consent?: boolean;
 }
 
 // Job types

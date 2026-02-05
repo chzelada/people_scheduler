@@ -76,6 +76,47 @@ pub async fn init_database(pool: &PgPool) -> Result<(), Box<dyn std::error::Erro
         Err(e) => tracing::warn!("Migration 008: {}", e),
     }
 
+    // Migration 009: Add additional servidor fields
+    match sqlx::query("ALTER TABLE people ADD COLUMN IF NOT EXISTS birth_date DATE")
+        .execute(pool)
+        .await
+    {
+        Ok(_) => tracing::info!("Migration 009a: birth_date column added"),
+        Err(e) => tracing::warn!("Migration 009a: {}", e),
+    }
+
+    match sqlx::query("ALTER TABLE people ADD COLUMN IF NOT EXISTS first_communion BOOLEAN NOT NULL DEFAULT FALSE")
+        .execute(pool)
+        .await
+    {
+        Ok(_) => tracing::info!("Migration 009b: first_communion column added"),
+        Err(e) => tracing::warn!("Migration 009b: {}", e),
+    }
+
+    match sqlx::query("ALTER TABLE people ADD COLUMN IF NOT EXISTS parent_name TEXT")
+        .execute(pool)
+        .await
+    {
+        Ok(_) => tracing::info!("Migration 009c: parent_name column added"),
+        Err(e) => tracing::warn!("Migration 009c: {}", e),
+    }
+
+    match sqlx::query("ALTER TABLE people ADD COLUMN IF NOT EXISTS address TEXT")
+        .execute(pool)
+        .await
+    {
+        Ok(_) => tracing::info!("Migration 009d: address column added"),
+        Err(e) => tracing::warn!("Migration 009d: {}", e),
+    }
+
+    match sqlx::query("ALTER TABLE people ADD COLUMN IF NOT EXISTS photo_consent BOOLEAN NOT NULL DEFAULT FALSE")
+        .execute(pool)
+        .await
+    {
+        Ok(_) => tracing::info!("Migration 009e: photo_consent column added"),
+        Err(e) => tracing::warn!("Migration 009e: {}", e),
+    }
+
     // Initialize admin user if not exists
     auth::init_admin_user(pool).await?;
 
