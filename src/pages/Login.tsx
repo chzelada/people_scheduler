@@ -18,10 +18,12 @@ export function Login() {
     <div className="min-h-screen flex items-center justify-center bg-gray-100">
       <div className="max-w-md w-full space-y-8 p-8 bg-white rounded-lg shadow-lg">
         <div className="text-center">
-          <div className="mx-auto h-12 w-12 flex items-center justify-center rounded-full bg-primary-100">
-            <Lock className="h-6 w-6 text-primary-600" />
-          </div>
-          <h2 className="mt-6 text-2xl font-bold text-gray-900">
+          <img
+            src="/logo.jpeg"
+            alt="Parroquia San Martín de Porres"
+            className="mx-auto h-32 w-auto"
+          />
+          <h2 className="mt-4 text-xl font-bold text-gray-900">
             Programación de Servicio Misa de Niños
           </h2>
           <p className="mt-2 text-sm text-gray-600">

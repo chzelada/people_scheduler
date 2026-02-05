@@ -40,9 +40,18 @@ export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
 
   return (
     <aside className="w-64 bg-white border-r border-gray-200 flex flex-col">
-      <div className="p-6 border-b border-gray-200">
-        <h1 className="text-lg font-bold text-gray-900">Programación de Servicio</h1>
-        <p className="text-sm text-gray-500 mt-1">Misa de Niños</p>
+      <div className="p-4 border-b border-gray-200">
+        <div className="flex items-center gap-3">
+          <img
+            src="/logo-misa.jpeg"
+            alt="San Martín de Porres"
+            className="w-14 h-14 rounded-full object-cover"
+          />
+          <div>
+            <h1 className="text-base font-bold text-gray-900 leading-tight">Programación de Servicio</h1>
+            <p className="text-sm text-gray-500">Misa de Niños</p>
+          </div>
+        </div>
       </div>
 
       <nav className="flex-1 p-4">
