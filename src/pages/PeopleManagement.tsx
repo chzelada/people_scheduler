@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Plus, Search, Upload, AlertCircle, CheckCircle, X, Key, Copy, Check } from 'lucide-react';
 import { Button, Modal, Input } from '../components/common';
-import { PersonList, PersonForm } from '../components/people';
+import { PersonList, PersonForm, PersonDetailModal } from '../components/people';
 import { usePeopleStore } from '../stores/peopleStore';
 import { useJobsStore } from '../stores/jobsStore';
 import { peopleApi } from '../services/api';
@@ -34,6 +34,8 @@ export function PeopleManagement() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isCredentialsModalOpen, setIsCredentialsModalOpen] = useState(false);
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [viewingPerson, setViewingPerson] = useState<Person | null>(null);
   const [createdCredentials, setCreatedCredentials] = useState<CreatedCredentials | null>(null);
   const [copiedField, setCopiedField] = useState<'username' | 'password' | null>(null);
   const [editingPerson, setEditingPerson] = useState<Person | null>(null);
@@ -117,6 +119,11 @@ export function PeopleManagement() {
   const handleEdit = (person: Person) => {
     setEditingPerson(person);
     setIsModalOpen(true);
+  };
+
+  const handleViewDetail = (person: Person) => {
+    setViewingPerson(person);
+    setIsDetailModalOpen(true);
   };
 
   const handleDelete = async (person: Person) => {
@@ -352,6 +359,7 @@ export function PeopleManagement() {
           onResetPassword={handleResetPassword}
           onCreateUser={handleCreateUser}
           onToggleExclusion={handleToggleExclusion}
+          onViewDetail={handleViewDetail}
         />
 
         <div className="px-6 py-4 border-t border-gray-200 text-sm text-gray-500">
@@ -547,6 +555,15 @@ export function PeopleManagement() {
           </div>
         )}
       </Modal>
+
+      {/* Person Detail Modal */}
+      <PersonDetailModal
+        person={viewingPerson}
+        jobs={jobs}
+        isOpen={isDetailModalOpen}
+        onClose={() => { setIsDetailModalOpen(false); setViewingPerson(null); }}
+        onEdit={handleEdit}
+      />
     </div>
   );
 }

@@ -11,6 +11,7 @@ interface PersonListProps {
   onResetPassword?: (person: Person) => void;
   onCreateUser?: (person: Person) => void;
   onToggleExclusion?: (personId: string, field: 'exclude_monaguillos' | 'exclude_lectores', value: boolean) => void;
+  onViewDetail?: (person: Person) => void;
 }
 
 const frequencyLabels: Record<string, string> = {
@@ -19,7 +20,7 @@ const frequencyLabels: Record<string, string> = {
   monthly: 'Mensual',
 };
 
-export function PersonList({ people, jobs, onEdit, onDelete, onResetPassword, onCreateUser, onToggleExclusion }: PersonListProps) {
+export function PersonList({ people, jobs, onEdit, onDelete, onResetPassword, onCreateUser, onToggleExclusion, onViewDetail }: PersonListProps) {
   const getJobNames = (jobIds: string[]) => {
     return jobIds
       .map((id) => jobs.find((j) => j.id === id)?.name)
@@ -48,7 +49,15 @@ export function PersonList({ people, jobs, onEdit, onDelete, onResetPassword, on
             size="sm"
           />
           <div>
-            <div className="font-medium">{person.first_name} {person.last_name}</div>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onViewDetail?.(person);
+              }}
+              className="font-medium text-left hover:text-primary-600 hover:underline focus:outline-none focus:text-primary-600"
+            >
+              {person.first_name} {person.last_name}
+            </button>
             {person.username && (
               <div className="text-gray-500 text-xs font-mono">@{person.username}</div>
             )}
