@@ -193,9 +193,9 @@ export function PersonDetailModal({ person, jobs, isOpen, onClose, onEdit }: Per
               )}
 
               {/* Service dates */}
-              <div className="bg-blue-50 rounded-lg p-4 space-y-2">
+              <div className="bg-primary-50 rounded-lg p-4 space-y-2">
                 <div className="flex items-center text-sm">
-                  <Clock className="w-4 h-4 text-blue-500 mr-3" />
+                  <Clock className="w-4 h-4 text-primary-500 mr-3" />
                   <span className="text-gray-700">
                     Último servicio:{' '}
                     {isLoadingHistory ? (
@@ -208,7 +208,7 @@ export function PersonDetailModal({ person, jobs, isOpen, onClose, onEdit }: Per
                   </span>
                 </div>
                 <div className="flex items-center text-sm">
-                  <CalendarCheck className="w-4 h-4 text-blue-500 mr-3" />
+                  <CalendarCheck className="w-4 h-4 text-primary-500 mr-3" />
                   <span className="text-gray-700">
                     Próximo servicio:{' '}
                     {isLoadingHistory ? (

@@ -11,6 +11,7 @@ import {
   User
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
+import { ThemeToggle } from './ThemeToggle';
 
 type Page = 'dashboard' | 'people' | 'schedule' | 'unavailability' | 'siblings' | 'reports' | 'settings';
 
@@ -91,13 +92,16 @@ export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
                 <p className="text-xs text-gray-500">{user.role}</p>
               </div>
             </div>
-            <button
-              onClick={handleLogout}
-              className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
-              title="Cerrar sesión"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
+            <div className="flex items-center gap-1">
+              <ThemeToggle />
+              <button
+                onClick={handleLogout}
+                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                title="Cerrar sesión"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         )}
         <p className="text-xs text-gray-500 text-center">

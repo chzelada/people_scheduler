@@ -58,7 +58,7 @@ export function Reports() {
             </div>
             <div className="flex justify-between items-center py-2 border-b border-gray-100">
               <span className="text-gray-600">Total Monaguillos ({selectedYear})</span>
-              <span className="inline-flex items-center px-2 py-0.5 rounded text-sm font-medium bg-blue-100 text-blue-800">
+              <span className="inline-flex items-center px-2 py-0.5 rounded text-sm font-medium bg-primary-100 text-primary-800">
                 {fairnessScores.reduce((sum, s) => {
                   const job = s.assignments_by_job?.find(j => j.job_name.toLowerCase() === 'monaguillos');
                   return sum + (job?.count || 0);

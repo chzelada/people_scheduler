@@ -317,7 +317,7 @@ export function PersonHistoryModal({ isOpen, onClose, personId, personName }: Pe
             <div className="text-gray-500">Sirvió</div>
           </div>
           <div>
-            <div className="font-medium text-blue-600">{stats.monaguillo}</div>
+            <div className="font-medium text-primary-600">{stats.monaguillo}</div>
             <div className="text-gray-500">Monaguillo</div>
           </div>
           <div>

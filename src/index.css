@@ -3,7 +3,33 @@
 @source "../index.html";
 @source "./**/*.{js,ts,jsx,tsx}";
 
-@theme {
+/* Navy Gold Theme (San Martín) - Default */
+:root {
+  --color-primary-50: #e6eef5;
+  --color-primary-100: #b3cce0;
+  --color-primary-200: #80aac9;
+  --color-primary-300: #4d88b3;
+  --color-primary-400: #26699c;
+  --color-primary-500: #003366;
+  --color-primary-600: #002d5c;
+  --color-primary-700: #002652;
+  --color-primary-800: #001f47;
+  --color-primary-900: #00183d;
+
+  --color-accent-50: #fdf8e8;
+  --color-accent-100: #f9edd1;
+  --color-accent-200: #f0daa3;
+  --color-accent-300: #e7c775;
+  --color-accent-400: #deb447;
+  --color-accent-500: #D4AF37;
+  --color-accent-600: #bf9d31;
+  --color-accent-700: #a9892b;
+  --color-accent-800: #947525;
+  --color-accent-900: #7e611f;
+}
+
+/* Blue Theme (Original) */
+:root[data-theme="blue"] {
   --color-primary-50: #eff6ff;
   --color-primary-100: #dbeafe;
   --color-primary-200: #bfdbfe;
@@ -14,6 +40,41 @@
   --color-primary-700: #1d4ed8;
   --color-primary-800: #1e40af;
   --color-primary-900: #1e3a8a;
+
+  --color-accent-50: #eff6ff;
+  --color-accent-100: #dbeafe;
+  --color-accent-200: #bfdbfe;
+  --color-accent-300: #93c5fd;
+  --color-accent-400: #60a5fa;
+  --color-accent-500: #3b82f6;
+  --color-accent-600: #2563eb;
+  --color-accent-700: #1d4ed8;
+  --color-accent-800: #1e40af;
+  --color-accent-900: #1e3a8a;
+}
+
+@theme {
+  --color-primary-50: var(--color-primary-50);
+  --color-primary-100: var(--color-primary-100);
+  --color-primary-200: var(--color-primary-200);
+  --color-primary-300: var(--color-primary-300);
+  --color-primary-400: var(--color-primary-400);
+  --color-primary-500: var(--color-primary-500);
+  --color-primary-600: var(--color-primary-600);
+  --color-primary-700: var(--color-primary-700);
+  --color-primary-800: var(--color-primary-800);
+  --color-primary-900: var(--color-primary-900);
+
+  --color-accent-50: var(--color-accent-50);
+  --color-accent-100: var(--color-accent-100);
+  --color-accent-200: var(--color-accent-200);
+  --color-accent-300: var(--color-accent-300);
+  --color-accent-400: var(--color-accent-400);
+  --color-accent-500: var(--color-accent-500);
+  --color-accent-600: var(--color-accent-600);
+  --color-accent-700: var(--color-accent-700);
+  --color-accent-800: var(--color-accent-800);
+  --color-accent-900: var(--color-accent-900);
 }
 
 @layer base {

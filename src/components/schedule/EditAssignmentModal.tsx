@@ -263,7 +263,7 @@ export function EditAssignmentModal({
                     </div>
                     <div className="flex items-center space-x-2">
                       {person.sibling_status === 'preferred' && (
-                        <span className="px-1.5 py-0.5 text-xs bg-blue-100 text-blue-700 rounded">
+                        <span className="px-1.5 py-0.5 text-xs bg-primary-100 text-primary-700 rounded">
                           <Users className="w-3 h-3 inline mr-0.5" />
                           Hermano
                         </span>

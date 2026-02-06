@@ -31,7 +31,7 @@ export function Avatar({ photoUrl, firstName, lastName, size = 'md', className =
 
   return (
     <div
-      className={`${sizeClass} rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white font-medium ${className}`}
+      className={`${sizeClass} rounded-full bg-gradient-to-br from-primary-500 to-purple-500 flex items-center justify-center text-white font-medium ${className}`}
     >
       {initials}
     </div>

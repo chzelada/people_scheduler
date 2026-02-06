@@ -196,7 +196,7 @@ export function ServidorDashboard() {
   const daysOfWeek = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50">
+    <div className="min-h-screen bg-gradient-to-br from-primary-50 via-purple-50 to-pink-50">
       {/* Header */}
       <header className="bg-white shadow-sm">
         <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
@@ -249,7 +249,7 @@ export function ServidorDashboard() {
             </div>
           </div>
         ) : nextAssignment ? (
-          <div className="bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 rounded-2xl shadow-lg p-1">
+          <div className="bg-gradient-to-r from-primary-500 via-purple-500 to-pink-500 rounded-2xl shadow-lg p-1">
             <div className="bg-white rounded-xl p-6 md:p-8">
               <div className="flex items-center justify-center mb-2">
                 <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-yellow-100 text-yellow-800">
@@ -409,7 +409,7 @@ export function ServidorDashboard() {
                     key={index}
                     onClick={() => isFutureSunday && handleSundayClick(day)}
                     className={`flex-shrink-0 w-32 rounded-xl border-2 transition-all ${
-                      isTodayDate ? 'ring-2 ring-blue-500 ring-offset-2' : ''
+                      isTodayDate ? 'ring-2 ring-primary-500 ring-offset-2' : ''
                     } ${isFutureSunday ? 'cursor-pointer hover:shadow-md' : 'opacity-60'} ${
                       unavailability
                         ? 'border-red-300 bg-red-50'
@@ -435,7 +435,7 @@ export function ServidorDashboard() {
                       backgroundColor: `${assignment.job_color}20`
                     } : {}}>
                       <div className={`text-2xl font-bold ${
-                        isTodayDate ? 'text-blue-600' : unavailability ? 'text-red-600' : 'text-gray-900'
+                        isTodayDate ? 'text-primary-600' : unavailability ? 'text-red-600' : 'text-gray-900'
                       }`}>
                         {format(day, 'd')}
                       </div>

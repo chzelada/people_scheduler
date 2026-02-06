@@ -76,6 +76,7 @@ Zustand stores in `src/stores/` with localStorage persistence:
 - `authStore.ts` - JWT token + user info
 - `scheduleStore.ts` - Schedules and assignments
 - `peopleStore.ts`, `jobsStore.ts`, `unavailabilityStore.ts`
+- `themeStore.ts` - Theme preference (navy/blue)
 
 ## Environment Variables
 
@@ -167,6 +168,15 @@ Auto-created on first run:
 - Loads assignment history dynamically via `/api/reports/person/{id}/history`
 - Components: `PersonDetailModal.tsx` (modal), uses `Avatar.tsx` for photo display
 - Age calculated from `birth_date`, service dates from assignment history
+
+### Theme System
+- Two themes available: **Navy/Gold** (San Martín parish branding) and **Blue** (original)
+- Navy/Gold is the default theme with primary `#003366` and accent `#D4AF37`
+- Toggle via palette icon in sidebar footer
+- Preference persists in localStorage via `themeStore.ts`
+- CSS variables defined in `src/index.css` with `data-theme` attribute switching
+- All components use `primary-*` and `accent-*` Tailwind classes (not hardcoded `blue-*`)
+- To revert permanently: `git checkout main` or switch branches
 
 ## API Endpoints Pattern
 

@@ -59,8 +59,8 @@ export function Dashboard() {
         <StatCard
           title="Voluntarios Activos"
           value={activePeople}
-          icon={<Users className="w-6 h-6 text-blue-600" />}
-          color="bg-blue-100"
+          icon={<Users className="w-6 h-6 text-primary-600" />}
+          color="bg-primary-100"
         />
         <StatCard
           title="Servicios"
