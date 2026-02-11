@@ -33,7 +33,11 @@ const statusLabels: Record<string, string> = {
   ARCHIVED: 'ARCHIVADO',
 };
 
-export function Dashboard() {
+interface DashboardProps {
+  onNavigate?: (page: string) => void;
+}
+
+export function Dashboard({ onNavigate }: DashboardProps) {
   const { people, fetchPeople } = usePeopleStore();
   const { jobs, fetchJobs } = useJobsStore();
   const { schedules, fetchSchedules } = useScheduleStore();
@@ -156,21 +160,21 @@ export function Dashboard() {
       <div className="bg-white rounded-lg shadow p-6">
         <h2 className="text-lg font-medium text-gray-900 mb-4">Acciones Rápidas</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <button className="p-4 text-left border border-gray-200 rounded-lg hover:border-primary-300 hover:bg-primary-50 transition-colors">
+          <button onClick={() => onNavigate?.('schedule')} className="p-4 text-left border border-gray-200 rounded-lg hover:border-primary-300 hover:bg-primary-50 transition-colors">
             <Calendar className="w-8 h-8 text-primary-600 mb-2" />
             <h3 className="font-medium text-gray-900">Generar Horario</h3>
             <p className="text-sm text-gray-500 mt-1">
               Crear un nuevo horario mensual
             </p>
           </button>
-          <button className="p-4 text-left border border-gray-200 rounded-lg hover:border-primary-300 hover:bg-primary-50 transition-colors">
+          <button onClick={() => onNavigate?.('people')} className="p-4 text-left border border-gray-200 rounded-lg hover:border-primary-300 hover:bg-primary-50 transition-colors">
             <Users className="w-8 h-8 text-primary-600 mb-2" />
             <h3 className="font-medium text-gray-900">Agregar Voluntario</h3>
             <p className="text-sm text-gray-500 mt-1">
               Registrar un nuevo voluntario
             </p>
           </button>
-          <button className="p-4 text-left border border-gray-200 rounded-lg hover:border-primary-300 hover:bg-primary-50 transition-colors">
+          <button onClick={() => onNavigate?.('unavailability')} className="p-4 text-left border border-gray-200 rounded-lg hover:border-primary-300 hover:bg-primary-50 transition-colors">
             <AlertTriangle className="w-8 h-8 text-primary-600 mb-2" />
             <h3 className="font-medium text-gray-900">Marcar Ausencia</h3>
             <p className="text-sm text-gray-500 mt-1">

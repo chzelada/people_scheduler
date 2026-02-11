@@ -19,7 +19,7 @@ export function Login() {
       <div className="max-w-md w-full space-y-8 p-8 bg-white rounded-lg shadow-lg">
         <div className="text-center">
           <img
-            src="/logo.jpeg"
+            src={`${import.meta.env.BASE_URL}logo.jpeg`}
             alt="Parroquia San Martín de Porres"
             className="mx-auto h-32 w-auto"
           />

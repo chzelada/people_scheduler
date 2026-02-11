@@ -40,6 +40,8 @@ export function PersonList({ people, jobs, onEdit, onDelete, onResetPassword, on
     {
       key: 'name',
       header: 'Nombre',
+      sortable: true,
+      getValue: (person: Person) => `${person.first_name} ${person.last_name}`,
       render: (person: Person) => (
         <div className="flex items-center space-x-3">
           <Avatar
@@ -68,6 +70,7 @@ export function PersonList({ people, jobs, onEdit, onDelete, onResetPassword, on
     {
       key: 'jobs',
       header: 'Servicios',
+      sortable: false,
       render: (person: Person) => (
         <div className="flex flex-wrap gap-1">
           {person.job_ids.map((jobId) => {
@@ -89,6 +92,7 @@ export function PersonList({ people, jobs, onEdit, onDelete, onResetPassword, on
     {
       key: 'frequency',
       header: 'Frecuencia',
+      sortable: false,
       render: (person: Person) => (
         <span>{frequencyLabels[person.preferred_frequency] || person.preferred_frequency}</span>
       ),
@@ -96,6 +100,7 @@ export function PersonList({ people, jobs, onEdit, onDelete, onResetPassword, on
     {
       key: 'active',
       header: 'Activo',
+      sortable: false,
       render: (person: Person) => (
         person.active ? (
           <Check className="w-5 h-5 text-green-500" />
@@ -107,6 +112,7 @@ export function PersonList({ people, jobs, onEdit, onDelete, onResetPassword, on
     {
       key: 'exclude_monaguillos',
       header: 'Asignar M',
+      sortable: false,
       headerTitle: 'Asignar como Monaguillo',
       render: (person: Person) => {
         const isQualified = hasJob(person, 'monaguillo');
@@ -134,6 +140,7 @@ export function PersonList({ people, jobs, onEdit, onDelete, onResetPassword, on
     {
       key: 'exclude_lectores',
       header: 'Asignar L',
+      sortable: false,
       headerTitle: 'Asignar como Lector',
       render: (person: Person) => {
         const isQualified = hasJob(person, 'lector');
@@ -161,6 +168,7 @@ export function PersonList({ people, jobs, onEdit, onDelete, onResetPassword, on
     {
       key: 'actions',
       header: 'Acciones',
+      sortable: false,
       render: (person: Person) => (
         <div className="flex space-x-2">
           <button
@@ -206,6 +214,7 @@ export function PersonList({ people, jobs, onEdit, onDelete, onResetPassword, on
       data={people}
       keyExtractor={(person) => person.id}
       emptyMessage="No hay servidores registrados. Haga clic en 'Agregar Servidor' para comenzar."
+      enableSorting
     />
   );
 }

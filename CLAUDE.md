@@ -38,9 +38,16 @@ npm run tauri build      # Build .dmg (macOS) or .msi (Windows)
 
 ### Deployment (AWS)
 ```bash
-./scripts/deploy.sh      # Compiles Lambda, uploads frontend to S3, invalidates CloudFront
+./scripts/deploy.sh      # Compiles Lambda, uploads frontend to S3 (/misakids), deploys landing page, invalidates CloudFront
 ```
 Requires: `cargo-zigbuild`, `zig`, AWS CLI configured with `people-scheduler` profile.
+
+### Domain & URL Structure
+- **`adaltare.com/`** — Landing page (managed by separate `misa-scheduler` project, do NOT overwrite from this repo)
+- **`adaltare.com/misakids/`** — People Scheduler React app (Vite `base: '/misakids/'`)
+- **`www.adaltare.com`** — Same as `adaltare.com` (both alias to CloudFront)
+- CloudFront Function `adaltare-spa-routing` handles `/misakids` → `/misakids/` redirect and SPA routing
+- SSL: ACM wildcard cert `*.adaltare.com` + `adaltare.com` in us-east-1
 
 ## Architecture
 

@@ -60,8 +60,11 @@ echo -e "${GREEN}✓ Lambda deployed${NC}"
 echo -e "\n${YELLOW}[3/4] Building and deploying frontend...${NC}"
 cd "$PROJECT_ROOT"
 npm run build
-aws --profile "$AWS_PROFILE" s3 sync dist/ "s3://$S3_BUCKET" --delete
-echo -e "${GREEN}✓ Frontend deployed to S3${NC}"
+aws --profile "$AWS_PROFILE" s3 sync dist/ "s3://$S3_BUCKET/misakids" --delete
+echo -e "${GREEN}✓ Frontend deployed to S3 (/misakids)${NC}"
+
+# NOTE: Landing page (S3 root) is managed by the misa-scheduler project.
+# Do NOT deploy landing assets from this repo to avoid overwriting it.
 
 # Step 4: Invalidate CloudFront cache
 echo -e "\n${YELLOW}[4/4] Invalidating CloudFront cache...${NC}"

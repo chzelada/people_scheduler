@@ -44,7 +44,7 @@ export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
       <div className="p-4 border-b border-gray-200">
         <div className="flex items-center gap-3">
           <img
-            src="/logo-misa.jpeg"
+            src={`${import.meta.env.BASE_URL}logo-misa.jpeg`}
             alt="San Martín de Porres"
             className="w-14 h-14 rounded-full object-cover"
           />

@@ -32,7 +32,7 @@ function App() {
   const renderPage = () => {
     switch (currentPage) {
       case 'dashboard':
-        return <Dashboard />;
+        return <Dashboard onNavigate={setCurrentPage as (page: string) => void} />;
       case 'people':
         return <PeopleManagement />;
       case 'schedule':
@@ -46,7 +46,7 @@ function App() {
       case 'settings':
         return <Settings />;
       default:
-        return <Dashboard />;
+        return <Dashboard onNavigate={setCurrentPage as (page: string) => void} />;
     }
   };
 
