@@ -186,6 +186,52 @@ pub async fn generate(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
+    // Load sibling groups with their members
+    let sibling_groups_raw = sqlx::query_as::<_, crate::models::SiblingGroup>(
+        "SELECT * FROM sibling_groups",
+    )
+    .fetch_all(&pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let mut sibling_groups: Vec<SiblingGroupInfo> = Vec::new();
+    for sg in sibling_groups_raw {
+        let member_ids: Vec<String> = sqlx::query_scalar(
+            "SELECT person_id FROM sibling_group_members WHERE sibling_group_id = $1",
+        )
+        .bind(&sg.id)
+        .fetch_all(&pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+        if member_ids.len() >= 2 {
+            tracing::info!(
+                "Sibling group '{}' ({}): {} members, rule={}",
+                sg.name,
+                sg.id,
+                member_ids.len(),
+                sg.pairing_rule
+            );
+            sibling_groups.push(SiblingGroupInfo {
+                name: sg.name,
+                pairing_rule: sg.pairing_rule,
+                member_ids,
+            });
+        }
+    }
+
+    // Build person -> sibling groups lookup map
+    // person_id -> Vec<(group_index, pairing_rule)>
+    let mut person_sibling_map: HashMap<String, Vec<(usize, String)>> = HashMap::new();
+    for (idx, group) in sibling_groups.iter().enumerate() {
+        for member_id in &group.member_ids {
+            person_sibling_map
+                .entry(member_id.clone())
+                .or_default()
+                .push((idx, group.pairing_rule.clone()));
+        }
+    }
+
     // Generate assignments using the algorithm
     let mut dates_with_assignments = Vec::new();
 
@@ -200,7 +246,7 @@ pub async fn generate(
 
         for job in &jobs {
             let job_assignments =
-                generate_job_assignments(&pool, &sd, job, year, &assigned_this_date, &assigned_this_month)
+                generate_job_assignments(&pool, &sd, job, year, &assigned_this_date, &assigned_this_month, &sibling_groups, &person_sibling_map)
                     .await
                     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
 
@@ -281,6 +327,13 @@ fn count_sundays_in_month(year: i32, month: u32) -> u32 {
     get_sundays_of_month(year, month).len() as u32
 }
 
+struct SiblingGroupInfo {
+    #[allow(dead_code)]
+    name: String,
+    pairing_rule: String, // "TOGETHER" or "SEPARATE"
+    member_ids: Vec<String>,
+}
+
 #[derive(FromRow, Clone)]
 struct CandidatePerson {
     id: String,
@@ -300,6 +353,7 @@ struct HistoryPositionRow {
     service_date: NaiveDate, // Used for ordering in query
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn generate_job_assignments(
     pool: &PgPool,
     service_date: &ServiceDate,
@@ -307,6 +361,8 @@ async fn generate_job_assignments(
     year: i32,
     assigned_this_date: &HashMap<String, String>,
     assigned_this_month: &HashMap<String, Vec<String>>, // person_id -> list of job_ids they've been assigned this month
+    sibling_groups: &[SiblingGroupInfo],
+    person_sibling_map: &HashMap<String, Vec<(usize, String)>>,
 ) -> Result<Vec<AssignmentWithDetails>, String> {
     let num_positions = job.people_required as i32;
 
@@ -480,6 +536,38 @@ async fn generate_job_assignments(
             .collect();
     }
 
+    // Apply sibling group SEPARATE constraint (hard filter)
+    // If a person has a SEPARATE sibling already assigned this date, exclude them
+    let candidates_before_sibling = candidates.len();
+    candidates.retain(|c| {
+        if let Some(groups) = person_sibling_map.get(&c.id) {
+            for (group_idx, rule) in groups {
+                if rule == "SEPARATE" {
+                    let group = &sibling_groups[*group_idx];
+                    // Check if any other member of this SEPARATE group is already assigned this date
+                    for member_id in &group.member_ids {
+                        if member_id != &c.id && assigned_this_date.contains_key(member_id) {
+                            tracing::info!(
+                                "SEPARATE constraint: excluding {} {} from {} (sibling already assigned this date)",
+                                c.first_name, c.last_name, job.name
+                            );
+                            return false;
+                        }
+                    }
+                }
+            }
+        }
+        true
+    });
+    if candidates_before_sibling != candidates.len() {
+        tracing::info!(
+            "Sibling SEPARATE filter for {}: {} -> {} candidates",
+            job.name,
+            candidates_before_sibling,
+            candidates.len()
+        );
+    }
+
     if candidates.is_empty() {
         return Ok(Vec::new());
     }
@@ -500,6 +588,31 @@ async fn generate_job_assignments(
     }
 
     // Sort by fewest assignments (fairness)
+    person_scores.sort_by_key(|(_, count)| *count);
+
+    // Apply sibling group TOGETHER boost (soft constraint)
+    // If a person has a TOGETHER sibling already assigned this date, give them a big score boost
+    for (candidate, count) in person_scores.iter_mut() {
+        if let Some(groups) = person_sibling_map.get(&candidate.id) {
+            for (group_idx, rule) in groups {
+                if rule == "TOGETHER" {
+                    let group = &sibling_groups[*group_idx];
+                    let sibling_assigned = group.member_ids.iter().any(|member_id| {
+                        member_id != &candidate.id && assigned_this_date.contains_key(member_id)
+                    });
+                    if sibling_assigned {
+                        tracing::info!(
+                            "TOGETHER boost: {} {} gets priority for {} (sibling already assigned this date)",
+                            candidate.first_name, candidate.last_name, job.name
+                        );
+                        *count = count.saturating_sub(1000);
+                        break; // One boost is enough
+                    }
+                }
+            }
+        }
+    }
+    // Re-sort after TOGETHER boost
     person_scores.sort_by_key(|(_, count)| *count);
 
     // Log all candidates with their scores
@@ -774,6 +887,20 @@ pub async fn update_assignment(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
         .ok_or((StatusCode::NOT_FOUND, "Assignment not found".to_string()))?;
 
+    // Validate person is active
+    let is_active = is_person_active(&pool, &input.person_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    if !is_active {
+        let person_name = get_person_name(&pool, &input.person_id)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+        return Err((
+            StatusCode::BAD_REQUEST,
+            format!("{} está inactivo/a y no puede ser asignado/a", person_name),
+        ));
+    }
+
     // Get service date for history update
     let sd = sqlx::query_as::<_, ServiceDate>("SELECT * FROM service_dates WHERE id = $1")
         .bind(&current.service_date_id)
@@ -1026,6 +1153,89 @@ pub async fn clear_assignment(
     }))
 }
 
+// ============ Get Service Date Team (all assignments for a date) ============
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ServiceDateTeamMember {
+    pub person_name: String,
+    pub position: Option<i32>,
+    pub position_name: Option<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ServiceDateJobGroup {
+    pub job_id: String,
+    pub job_name: String,
+    pub job_color: String,
+    pub members: Vec<ServiceDateTeamMember>,
+}
+
+#[derive(FromRow)]
+struct TeamAssignmentRow {
+    job_id: String,
+    job_name: String,
+    job_color: Option<String>,
+    person_name: Option<String>,
+    position: Option<i32>,
+    position_name: Option<String>,
+}
+
+pub async fn get_service_date_team(
+    State(pool): State<PgPool>,
+    Path(date): Path<String>,
+) -> Result<Json<Vec<ServiceDateJobGroup>>, (StatusCode, String)> {
+    let parsed_date = NaiveDate::parse_from_str(&date, "%Y-%m-%d")
+        .map_err(|e| (StatusCode::BAD_REQUEST, format!("Invalid date format: {}", e)))?;
+
+    let rows = sqlx::query_as::<_, TeamAssignmentRow>(
+        r#"
+        SELECT
+            j.id as job_id,
+            j.name as job_name,
+            j.color as job_color,
+            p.first_name || ' ' || p.last_name as person_name,
+            a.position,
+            a.position_name
+        FROM assignments a
+        JOIN service_dates sd ON a.service_date_id = sd.id
+        JOIN schedules s ON sd.schedule_id = s.id
+        JOIN jobs j ON a.job_id = j.id
+        LEFT JOIN people p ON a.person_id = p.id
+        WHERE sd.service_date = $1
+          AND s.status = 'PUBLISHED'
+          AND a.person_id IS NOT NULL
+        ORDER BY j.name, a.position
+        "#,
+    )
+    .bind(parsed_date)
+    .fetch_all(&pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    // Group by job
+    let mut groups: Vec<ServiceDateJobGroup> = Vec::new();
+    for row in rows {
+        let member = ServiceDateTeamMember {
+            person_name: row.person_name.unwrap_or_default(),
+            position: row.position,
+            position_name: row.position_name,
+        };
+
+        if let Some(group) = groups.iter_mut().find(|g| g.job_id == row.job_id) {
+            group.members.push(member);
+        } else {
+            groups.push(ServiceDateJobGroup {
+                job_id: row.job_id,
+                job_name: row.job_name,
+                job_color: row.job_color.unwrap_or_else(|| "#3B82F6".to_string()),
+                members: vec![member],
+            });
+        }
+    }
+
+    Ok(Json(groups))
+}
+
 // ============ Helper: Check if person is qualified for job ============
 
 async fn is_person_qualified_for_job(
@@ -1043,6 +1253,16 @@ async fn is_person_qualified_for_job(
     .map_err(|e| e.to_string())?;
 
     Ok(exists)
+}
+
+async fn is_person_active(pool: &PgPool, person_id: &str) -> Result<bool, String> {
+    let active: bool = sqlx::query_scalar("SELECT active FROM people WHERE id = $1")
+        .bind(person_id)
+        .fetch_one(pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(active)
 }
 
 async fn get_person_name(pool: &PgPool, person_id: &str) -> Result<String, String> {
@@ -1092,6 +1312,36 @@ pub async fn swap_assignments(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
         .ok_or((StatusCode::NOT_FOUND, "Assignment 2 not found".to_string()))?;
+
+    // Validate both people are active before swapping
+    if let Some(p1) = &assignment1.person_id {
+        let is_active = is_person_active(&pool, p1)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+        if !is_active {
+            let person_name = get_person_name(&pool, p1)
+                .await
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+            return Err((
+                StatusCode::BAD_REQUEST,
+                format!("{} está inactivo/a y no puede ser asignado/a", person_name),
+            ));
+        }
+    }
+    if let Some(p2) = &assignment2.person_id {
+        let is_active = is_person_active(&pool, p2)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+        if !is_active {
+            let person_name = get_person_name(&pool, p2)
+                .await
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+            return Err((
+                StatusCode::BAD_REQUEST,
+                format!("{} está inactivo/a y no puede ser asignado/a", person_name),
+            ));
+        }
+    }
 
     // Validate job qualifications before swapping
     // Check if person1 is qualified for assignment2's job
@@ -1313,6 +1563,22 @@ pub async fn move_assignment(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
         .ok_or((StatusCode::NOT_FOUND, "Assignment not found".to_string()))?;
+
+    // Validate person is active before moving
+    if let Some(person_id) = &source.person_id {
+        let is_active = is_person_active(&pool, person_id)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+        if !is_active {
+            let person_name = get_person_name(&pool, person_id)
+                .await
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+            return Err((
+                StatusCode::BAD_REQUEST,
+                format!("{} está inactivo/a y no puede ser asignado/a", person_name),
+            ));
+        }
+    }
 
     // Validate job qualification if moving to a different job
     if let Some(person_id) = &source.person_id {
