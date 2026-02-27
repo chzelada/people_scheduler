@@ -20,6 +20,7 @@ import type {
   SwapAssignmentsRequest,
   MoveAssignmentRequest,
   CompletenessResponse,
+  ServiceDateJobGroup,
 } from '../types';
 import { useAuthStore } from '../stores/authStore';
 
@@ -164,6 +165,7 @@ export const scheduleApi = {
   delete: (id: string) => del<void>(`/schedules/${id}`),
   getFairnessScores: (year: number) => get<FairnessScore[]>(`/reports/fairness?year=${year}`),
   getMyAssignments: (personId: string) => get<MyAssignment[]>(`/my-assignments/${personId}`),
+  getServiceDateTeam: (date: string) => get<ServiceDateJobGroup[]>(`/service-date-assignments/${date}`),
   getPersonAssignmentHistory: async (personId: string, _startDate: string, _endDate: string) => {
     const history = await get<PersonAssignmentDetail[]>(`/reports/person/${personId}/history`);
     return history;
@@ -171,8 +173,21 @@ export const scheduleApi = {
   getEligiblePeopleForAssignment: async (request: GetEligiblePeopleRequest) => {
     // Get all people qualified for the job and filter by availability
     const people = await get<Person[]>('/people');
+    // Look up job name to check exclusion flags
+    const jobs = await get<Job[]>('/jobs');
+    const job = jobs.find(j => j.id === request.job_id);
+    const jobNameLower = (job?.name || '').toLowerCase();
+    const isMonaguillo = jobNameLower === 'monaguillos' || jobNameLower.startsWith('monaguillos jr');
+    const isLector = jobNameLower === 'lectores';
+
     const eligible: EligiblePerson[] = people
-      .filter(p => p.active && p.job_ids?.includes(request.job_id))
+      .filter(p => {
+        if (!p.active) return false;
+        if (!p.job_ids?.includes(request.job_id)) return false;
+        if (isMonaguillo && p.exclude_monaguillos) return false;
+        if (isLector && p.exclude_lectores) return false;
+        return true;
+      })
       .map(p => ({
         id: p.id,
         first_name: p.first_name,

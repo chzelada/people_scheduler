@@ -46,13 +46,11 @@ export function EditAssignmentModal({
   const areJobsExclusive = (job1: string, job2: string): boolean => {
     const j1 = job1.toLowerCase();
     const j2 = job2.toLowerCase();
-    const exclusivePairs = [
-      ['monaguillos', 'monaguillos jr'],
-      ['monaguillos', 'lectores'],
-    ];
-    return exclusivePairs.some(
-      ([a, b]) => (j1 === a && j2 === b) || (j1 === b && j2 === a)
-    );
+    const isMona = (n: string) => n === 'monaguillos';
+    const isMonaJr = (n: string) => n.startsWith('monaguillos jr');
+    const isLect = (n: string) => n === 'lectores';
+    return (isMona(j1) && isMonaJr(j2)) || (isMonaJr(j1) && isMona(j2))
+      || (isMona(j1) && isLect(j2)) || (isLect(j1) && isMona(j2));
   };
 
   const loadEligiblePeople = async () => {

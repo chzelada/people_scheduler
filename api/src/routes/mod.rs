@@ -73,6 +73,10 @@ pub fn create_router(pool: PgPool) -> Router {
             "/my-assignments/{person_id}",
             get(schedules::get_my_assignments),
         )
+        .route(
+            "/service-date-assignments/{date}",
+            get(schedules::get_service_date_team),
+        )
         // Unavailability routes (admin)
         .route(
             "/unavailability",

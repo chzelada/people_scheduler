@@ -70,7 +70,7 @@ Requires: `cargo-zigbuild`, `zig`, AWS CLI configured with `people-scheduler` pr
 - `api/` - Rust web API (dual binary: standalone + Lambda)
   - `src/main.rs` - Standalone server binary (dev mode)
   - `src/lambda.rs` - AWS Lambda handler binary
-  - `src/routes/schedules.rs` - Scheduling algorithm implementation (~800 lines)
+  - `src/routes/schedules.rs` - Scheduling algorithm implementation (~1100 lines)
   - `src/auth.rs` - JWT + Argon2 password hashing
   - `src/models/` - Data models and request/response types
   - `src/db/` - Database connection and query utilities
@@ -127,11 +127,12 @@ New migrations are numbered sequentially in `migrations-postgres/`.
 - **Consecutive month restriction**: Monaguillos and Lectores cannot be assigned in consecutive months (new assignments only)
 - **Monthly assignment limit**: Max 1 assignment per job per month
 - **Job exclusions**: Person not excluded from job via `exclude_monaguillos` or `exclude_lectores` flags
+- **Sibling SEPARATE**: Members of a SEPARATE sibling group cannot be assigned on the same service date
 
 ### Soft Constraints
 - Equitable distribution (fairness score based on assignment history)
 - Frequency preference (weekly, bimonthly, monthly)
-- Sibling group rules (TOGETHER/SEPARATE)
+- **Sibling TOGETHER**: Members of a TOGETHER sibling group get a score boost (-1000) when a sibling is already assigned on the same date, strongly preferring co-assignment
 
 ### Rotation Bag Algorithm
 Each person has a "bag" of positions not yet done in the current cycle:
@@ -151,7 +152,14 @@ Auto-created on first run:
 ### Assignment Restrictions
 - **Consecutive months**: Monaguillos and Lectores cannot serve in consecutive months (enforced in `has_consecutive_month_restriction()`)
 - **Monthly limits**: Each person can only be assigned once per job per month
-- **Job exclusions**: People can be excluded from specific jobs via boolean flags (`exclude_monaguillos`, `exclude_lectores`)
+- **Job exclusions**: People can be excluded from specific jobs via boolean flags (`exclude_monaguillos`, `exclude_lectores`). The `exclude_monaguillos` flag applies to both Monaguillos AND Monaguillos Jr.
+- **Active validation on manual assignments**: `update_assignment`, `swap_assignments`, and `move_assignment` endpoints reject inactive people with HTTP 400
+- **Eligible people filter**: The manual assignment modal filters out people with exclusion flags and inactive status before displaying options
+
+### Job Name Matching
+- Job names in the DB may include punctuation (e.g., "Monaguillos Jr." with a period)
+- All job name comparisons use `starts_with("monaguillos jr")` instead of exact match to handle variations
+- This applies to: exclusion flag checks, mutual exclusivity checks, and consecutive month restrictions
 
 ### User Roles
 - **Admin**: Full access to all features (user management, scheduling, configuration, manage anyone's photo)
@@ -175,6 +183,19 @@ Auto-created on first run:
 - Loads assignment history dynamically via `/api/reports/person/{id}/history`
 - Components: `PersonDetailModal.tsx` (modal), uses `Avatar.tsx` for photo display
 - Age calculated from `birth_date`, service dates from assignment history
+
+### Sibling Group Constraints
+- Loaded at schedule generation time from `sibling_groups` + `sibling_group_members` tables
+- A `person_sibling_map` HashMap provides O(1) lookup by person_id
+- **SEPARATE** (hard constraint): Applied after monthly limit filter; candidates whose SEPARATE sibling is already in `assigned_this_date` are excluded
+- **TOGETHER** (soft constraint): Applied after fairness scoring; candidates whose TOGETHER sibling is already in `assigned_this_date` get a -1000 score boost
+- Works naturally because jobs are processed sequentially: when Job A assigns Sibling X, Job B sees X in `assigned_this_date` and boosts Sibling Y
+- Manual endpoints (swap/move) do NOT enforce sibling constraints — admin can override intentionally
+
+### Servidor Dashboard
+- Shows all assignments per date (not just one) — hero card, upcoming list, and calendar all support multiple assignments on the same Sunday
+- `getAssignmentsForDate()` returns array (uses `.filter()` not `.find()`)
+- Hero card groups all assignments for the nearest upcoming date with multiple colored badges
 
 ### Theme System
 - Two themes available: **Navy/Gold** (San Martín parish branding) and **Blue** (original)

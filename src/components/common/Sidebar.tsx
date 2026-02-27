@@ -8,7 +8,8 @@ import {
   Settings,
   UsersRound,
   LogOut,
-  User
+  User,
+  X
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import { ThemeToggle } from './ThemeToggle';
@@ -18,6 +19,8 @@ type Page = 'dashboard' | 'people' | 'schedule' | 'unavailability' | 'siblings' 
 interface SidebarProps {
   currentPage: Page;
   onNavigate: (page: Page) => void;
+  isOpen?: boolean;
+  onClose?: () => void;
 }
 
 const navItems: { id: Page; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
@@ -30,7 +33,7 @@ const navItems: { id: Page; label: string; icon: React.ComponentType<{ className
   { id: 'settings', label: 'Configuración', icon: Settings },
 ];
 
-export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
+export function Sidebar({ currentPage, onNavigate, isOpen = false, onClose }: SidebarProps) {
   const { user, logout } = useAuthStore();
 
   const handleLogout = () => {
@@ -39,8 +42,23 @@ export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
     }
   };
 
+  const handleNavigate = (page: Page) => {
+    onNavigate(page);
+    onClose?.();
+  };
+
   return (
-    <aside className="w-64 bg-white border-r border-gray-200 flex flex-col">
+    <>
+      {/* Mobile overlay */}
+      {isOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 md:hidden"
+          onClick={onClose}
+        />
+      )}
+    <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 flex flex-col transform transition-transform duration-200 ease-in-out md:relative md:translate-x-0 ${
+      isOpen ? 'translate-x-0' : '-translate-x-full'
+    }`}>
       <div className="p-4 border-b border-gray-200">
         <div className="flex items-center gap-3">
           <img
@@ -48,10 +66,16 @@ export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
             alt="San Martín de Porres"
             className="w-14 h-14 rounded-full object-cover"
           />
-          <div>
+          <div className="flex-1 min-w-0">
             <h1 className="text-base font-bold text-gray-900 leading-tight">Programación de Servicio</h1>
             <p className="text-sm text-gray-500">Misa de Niños</p>
           </div>
+          <button
+            onClick={onClose}
+            className="md:hidden p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-md"
+          >
+            <X className="w-5 h-5" />
+          </button>
         </div>
       </div>
 
@@ -64,7 +88,7 @@ export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
             return (
               <li key={item.id}>
                 <button
-                  onClick={() => onNavigate(item.id)}
+                  onClick={() => handleNavigate(item.id)}
                   className={`w-full flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
                     isActive
                       ? 'bg-primary-50 text-primary-700'
@@ -109,5 +133,6 @@ export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
         </p>
       </div>
     </aside>
+    </>
   );
 }

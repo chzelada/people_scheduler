@@ -307,13 +307,14 @@ fn get_sundays_of_month(year: i32, month: u32) -> Vec<NaiveDate> {
 fn are_jobs_exclusive(job1_name: &str, job2_name: &str) -> bool {
     let j1 = job1_name.to_lowercase();
     let j2 = job2_name.to_lowercase();
-    let exclusive_pairs = [
-        ("monaguillos", "monaguillos jr"),
-        ("monaguillos", "lectores"),  // Can't be monaguillo and lector same day
-    ];
-    exclusive_pairs
-        .iter()
-        .any(|(a, b)| (j1 == *a && j2 == *b) || (j1 == *b && j2 == *a))
+    // Use starts_with to handle variations like "Monaguillos Jr." vs "monaguillos jr"
+    let is_monaguillos = |n: &str| n == "monaguillos";
+    let is_monaguillos_jr = |n: &str| n.starts_with("monaguillos jr");
+    let is_lectores = |n: &str| n == "lectores";
+    // Monaguillos and Monaguillos Jr. are exclusive
+    (is_monaguillos(&j1) && is_monaguillos_jr(&j2)) || (is_monaguillos_jr(&j1) && is_monaguillos(&j2))
+    // Monaguillos and Lectores are exclusive
+    || (is_monaguillos(&j1) && is_lectores(&j2)) || (is_lectores(&j1) && is_monaguillos(&j2))
 }
 
 /// Check if a job has the consecutive month restriction (monaguillos and lectores only)
@@ -368,7 +369,7 @@ async fn generate_job_assignments(
 
     // Determine if this job should check exclusion flags
     let job_name_lower = job.name.to_lowercase();
-    let exclude_monaguillos_check = job_name_lower == "monaguillos" || job_name_lower == "monaguillos jr";
+    let exclude_monaguillos_check = job_name_lower == "monaguillos" || job_name_lower.starts_with("monaguillos jr");
     let exclude_lectores_check = job_name_lower == "lectores";
 
     // Get candidates: active people qualified for this job and available on this date

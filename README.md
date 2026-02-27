@@ -17,8 +17,9 @@ Disponible como:
   - **Lectores**: Monitor, Primera Lectura, Salmo y Segunda Lectura
 - **Rotación de Posiciones**: Algoritmo de "bolsa" que asegura que cada persona rote por todas las posiciones antes de repetir
 - **Programación Inteligente**: Algoritmo de satisfacción de restricciones con puntuación ponderada para distribución equitativa
-- **Emparejamiento de Hermanos**: Configurar grupos familiares para programar juntos o separados
+- **Emparejamiento de Hermanos**: Configurar grupos familiares para programar juntos (TOGETHER) o separados (SEPARATE), aplicado automáticamente en la generación de horarios
 - **Seguimiento de Ausencias**: Registrar cuando los voluntarios no están disponibles
+- **Vista del Servidor**: Dashboard personalizado con próximos servicios, calendario de domingos y gestión de ausencias
 - **Reportes de Equidad**: Visualizar distribución de asignaciones por persona y por servicio
 - **Importación CSV**: Importar voluntarios desde archivo CSV con detección de duplicados
 
@@ -248,11 +249,15 @@ people_scheduler/
 - La persona debe estar disponible en la fecha
 - La persona debe estar activa
 - No exceder semanas consecutivas máximas
+- Restricción de meses consecutivos (Monaguillos y Lectores)
+- Límite de 1 asignación por servicio por mes
+- Exclusión por flags (`exclude_monaguillos`, `exclude_lectores`)
+- **Hermanos SEPARATE**: No pueden servir el mismo domingo
 
 ### Restricciones Suaves
 - Distribución equitativa de asignaciones
 - Preferencia de frecuencia del voluntario
-- Reglas de emparejamiento de hermanos
+- **Hermanos TOGETHER**: Prioridad para servir el mismo domingo (boost de -1000 al score)
 
 ### Algoritmo de Rotación ("Bolsa")
 
@@ -272,6 +277,8 @@ Cada voluntario tiene una "bolsa" de posiciones pendientes:
 - **HTTPS** obligatorio vía CloudFront
 - Variables sensibles en AWS Lambda Environment Variables
 - Archivos `.env` excluidos del repositorio
+- Validación de estado activo en asignaciones manuales (update, swap, move)
+- Filtro de exclusión en lista de personas elegibles para asignación manual
 
 ---
 

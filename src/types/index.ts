@@ -267,6 +267,20 @@ export interface UpdateUnavailabilityRequest {
   recurring?: boolean;
 }
 
+// Service date team view
+export interface ServiceDateTeamMember {
+  person_name: string;
+  position?: number;
+  position_name?: string;
+}
+
+export interface ServiceDateJobGroup {
+  job_id: string;
+  job_name: string;
+  job_color: string;
+  members: ServiceDateTeamMember[];
+}
+
 // Eligible person for assignment editing
 export interface EligiblePerson {
   id: string;

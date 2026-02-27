@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { format, parseISO, isSameMonth, startOfMonth, addMonths, subMonths, eachDayOfInterval, startOfWeek, endOfWeek, endOfMonth, isToday, isSameDay, isSunday } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Calendar, ChevronLeft, ChevronRight, Star, LogOut, Key, XCircle, CalendarX, Trash2, Camera } from 'lucide-react';
+import { Calendar, ChevronLeft, ChevronRight, Star, LogOut, Key, XCircle, CalendarX, Trash2, Camera, Users } from 'lucide-react';
 import { scheduleApi, myUnavailabilityApi, myPhotoApi, peopleApi, MyAssignment } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
 import { Button, Modal, Input, Avatar, PhotoUpload } from '../components/common';
+import { ServiceDateTeamModal } from '../components/schedule/ServiceDateTeamModal';
 import type { Unavailability, Person } from '../types';
 
 export function ServidorDashboard() {
@@ -27,6 +28,10 @@ export function ServidorDashboard() {
   // Photo state
   const [personData, setPersonData] = useState<Person | null>(null);
   const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
+
+  // Team view state
+  const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
+  const [teamViewDate, setTeamViewDate] = useState<string | null>(null);
 
   useEffect(() => {
     if (user?.person_id) {
@@ -69,24 +74,9 @@ export function ServidorDashboard() {
   };
 
   const handleSundayClick = (date: Date) => {
-    // Only allow clicking on future Sundays
-    const todayDate = new Date();
-    todayDate.setHours(0, 0, 0, 0);
-    if (!isSunday(date) || date < todayDate) return;
-
-    // Check if already unavailable
-    const existing = unavailabilities.find(u => isSameDay(parseISO(u.start_date), date));
-    if (existing) {
-      // Ask to delete
-      if (window.confirm(`¿Deseas eliminar tu ausencia del ${format(date, "d 'de' MMMM", { locale: es })}?`)) {
-        handleDeleteUnavailability(existing.id);
-      }
-    } else {
-      // Open modal to add
-      setSelectedDate(date);
-      setUnavailabilityReason('');
-      setIsUnavailabilityModalOpen(true);
-    }
+    setSelectedDate(date);
+    setUnavailabilityReason('');
+    setIsUnavailabilityModalOpen(true);
   };
 
   const handleSaveUnavailability = async () => {
@@ -122,6 +112,11 @@ export function ServidorDashboard() {
     return unavailabilities.find(u => isSameDay(parseISO(u.start_date), date));
   };
 
+  const handleViewTeam = (date: Date) => {
+    setTeamViewDate(format(date, 'yyyy-MM-dd'));
+    setIsTeamModalOpen(true);
+  };
+
   const handleUploadPhoto = async (photoData: string) => {
     await myPhotoApi.upload(photoData);
     // Reload person data to get the updated photo
@@ -147,7 +142,14 @@ export function ServidorDashboard() {
 
   const upcomingAssignments = assignments.filter(a => parseISO(a.service_date) >= today);
   const pastAssignments = assignments.filter(a => parseISO(a.service_date) < today);
-  const nextAssignment = upcomingAssignments[0];
+  // Group: all assignments on the nearest upcoming date form the "next service"
+  const nextServiceDate = upcomingAssignments.length > 0 ? upcomingAssignments[0].service_date : null;
+  const nextAssignments = nextServiceDate
+    ? upcomingAssignments.filter(a => a.service_date === nextServiceDate)
+    : [];
+  const remainingUpcoming = nextServiceDate
+    ? upcomingAssignments.filter(a => a.service_date !== nextServiceDate)
+    : [];
 
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -189,8 +191,8 @@ export function ServidorDashboard() {
   const calendarEnd = endOfWeek(monthEnd, { weekStartsOn: 0 });
   const calendarDays = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
 
-  const getAssignmentForDate = (date: Date) => {
-    return assignments.find(a => isSameDay(parseISO(a.service_date), date));
+  const getAssignmentsForDate = (date: Date) => {
+    return assignments.filter(a => isSameDay(parseISO(a.service_date), date));
   };
 
   const daysOfWeek = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
@@ -248,7 +250,7 @@ export function ServidorDashboard() {
               <div className="h-4 bg-gray-200 rounded w-1/3 mx-auto"></div>
             </div>
           </div>
-        ) : nextAssignment ? (
+        ) : nextAssignments.length > 0 ? (
           <div className="bg-gradient-to-r from-primary-500 via-purple-500 to-pink-500 rounded-2xl shadow-lg p-1">
             <div className="bg-white rounded-xl p-6 md:p-8">
               <div className="flex items-center justify-center mb-2">
@@ -259,19 +261,24 @@ export function ServidorDashboard() {
               </div>
               <div className="text-center">
                 <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-2">
-                  {format(parseISO(nextAssignment.service_date), "EEEE d", { locale: es })}
+                  {format(parseISO(nextAssignments[0].service_date), "EEEE d", { locale: es })}
                 </h2>
                 <p className="text-xl text-gray-600 mb-4">
-                  {format(parseISO(nextAssignment.service_date), "MMMM yyyy", { locale: es })}
+                  {format(parseISO(nextAssignments[0].service_date), "MMMM yyyy", { locale: es })}
                 </p>
-                <div
-                  className="inline-block px-6 py-3 rounded-full text-white text-lg font-semibold"
-                  style={{ backgroundColor: nextAssignment.job_color }}
-                >
-                  {nextAssignment.job_name}
-                  {nextAssignment.position_name && (
-                    <span className="ml-2 opacity-90">- {nextAssignment.position_name}</span>
-                  )}
+                <div className="flex flex-wrap justify-center gap-2">
+                  {nextAssignments.map((a, idx) => (
+                    <div
+                      key={idx}
+                      className="inline-block px-6 py-3 rounded-full text-white text-lg font-semibold"
+                      style={{ backgroundColor: a.job_color }}
+                    >
+                      {a.job_name}
+                      {a.position_name && (
+                        <span className="ml-2 opacity-90">- {a.position_name}</span>
+                      )}
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
@@ -295,13 +302,13 @@ export function ServidorDashboard() {
         )}
 
         {/* Upcoming List */}
-        {upcomingAssignments.length > 1 && (
+        {remainingUpcoming.length > 0 && (
           <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-100">
               <h3 className="text-lg font-semibold text-gray-900">Próximos Servicios</h3>
             </div>
             <ul className="divide-y divide-gray-100">
-              {upcomingAssignments.slice(1).map((assignment, index) => (
+              {remainingUpcoming.map((assignment, index) => (
                 <li key={index} className="px-6 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors">
                   <div className="flex items-center space-x-4">
                     <div className="w-12 h-12 rounded-xl flex flex-col items-center justify-center bg-gray-100">
@@ -399,40 +406,41 @@ export function ServidorDashboard() {
             {/* Sundays only - horizontal scroll */}
             <div className="flex gap-3 overflow-x-auto pb-2">
               {calendarDays.filter(day => isSunday(day) && isSameMonth(day, currentMonth)).map((day, index) => {
-                const assignment = getAssignmentForDate(day);
+                const dayAssignments = getAssignmentsForDate(day);
                 const unavailability = getUnavailabilityForDate(day);
                 const isTodayDate = isToday(day);
                 const isFutureSunday = day >= today;
+                const hasAssignments = dayAssignments.length > 0;
+                const firstAssignment = dayAssignments[0];
 
                 return (
                   <div
                     key={index}
-                    onClick={() => isFutureSunday && handleSundayClick(day)}
                     className={`flex-shrink-0 w-32 rounded-xl border-2 transition-all ${
                       isTodayDate ? 'ring-2 ring-primary-500 ring-offset-2' : ''
-                    } ${isFutureSunday ? 'cursor-pointer hover:shadow-md' : 'opacity-60'} ${
+                    } ${!isFutureSunday ? 'opacity-60' : ''} ${
                       unavailability
                         ? 'border-red-300 bg-red-50'
-                        : assignment
+                        : hasAssignments
                           ? 'border-transparent'
                           : 'border-gray-200 bg-gray-50'
                     }`}
-                    style={assignment && !unavailability ? {
-                      borderColor: assignment.job_color,
-                      backgroundColor: `${assignment.job_color}10`
+                    style={hasAssignments && !unavailability ? {
+                      borderColor: firstAssignment.job_color,
+                      backgroundColor: `${firstAssignment.job_color}10`
                     } : {}}
                   >
                     {/* Date header */}
                     <div className={`px-3 py-2 text-center border-b ${
                       unavailability
                         ? 'border-red-200 bg-red-100'
-                        : assignment
+                        : hasAssignments
                           ? 'border-opacity-30'
                           : 'border-gray-200 bg-gray-100'
                     }`}
-                    style={assignment && !unavailability ? {
-                      borderColor: `${assignment.job_color}40`,
-                      backgroundColor: `${assignment.job_color}20`
+                    style={hasAssignments && !unavailability ? {
+                      borderColor: `${firstAssignment.job_color}40`,
+                      backgroundColor: `${firstAssignment.job_color}20`
                     } : {}}>
                       <div className={`text-2xl font-bold ${
                         isTodayDate ? 'text-primary-600' : unavailability ? 'text-red-600' : 'text-gray-900'
@@ -445,7 +453,7 @@ export function ServidorDashboard() {
                     </div>
 
                     {/* Content */}
-                    <div className="px-3 py-3 min-h-[80px] flex flex-col justify-center">
+                    <div className="px-3 py-2 min-h-[60px] flex flex-col justify-center gap-1">
                       {unavailability ? (
                         <div className="text-center">
                           <div className="text-red-600 font-medium text-sm">No disponible</div>
@@ -453,27 +461,58 @@ export function ServidorDashboard() {
                             <div className="text-red-400 text-xs mt-1 truncate">{unavailability.reason}</div>
                           )}
                         </div>
-                      ) : assignment ? (
-                        <div className="text-center">
-                          <div
-                            className="font-semibold text-sm"
-                            style={{ color: assignment.job_color }}
-                          >
-                            {assignment.job_name}
-                          </div>
-                          {assignment.position_name && (
-                            <div className="text-gray-600 text-xs mt-1">
-                              {assignment.position_name}
+                      ) : hasAssignments ? (
+                        <>
+                          {dayAssignments.map((a, idx) => (
+                            <div key={idx} className="text-center">
+                              <div
+                                className="font-semibold text-sm"
+                                style={{ color: a.job_color }}
+                              >
+                                {a.job_name}
+                              </div>
+                              {a.position_name && (
+                                <div className="text-gray-600 text-xs">
+                                  {a.position_name}
+                                </div>
+                              )}
                             </div>
-                          )}
-                        </div>
+                          ))}
+                        </>
                       ) : (
                         <div className="text-center">
                           <div className="text-gray-400 font-medium text-sm">Libre</div>
-                          {isFutureSunday && (
-                            <div className="text-gray-300 text-xs mt-1">Click para ausencia</div>
-                          )}
                         </div>
+                      )}
+                    </div>
+
+                    {/* Action links */}
+                    <div className="px-2 py-2 border-t border-gray-100 flex flex-col gap-1">
+                      <button
+                        onClick={() => handleViewTeam(day)}
+                        className="text-xs text-primary-600 hover:text-primary-800 hover:underline text-center"
+                      >
+                        Ver servidores
+                      </button>
+                      {isFutureSunday && !unavailability && (
+                        <button
+                          onClick={() => handleSundayClick(day)}
+                          className="text-xs text-red-500 hover:text-red-700 hover:underline text-center"
+                        >
+                          Marcar ausencia
+                        </button>
+                      )}
+                      {isFutureSunday && unavailability && (
+                        <button
+                          onClick={() => {
+                            if (window.confirm(`¿Eliminar ausencia del ${format(day, "d 'de' MMMM", { locale: es })}?`)) {
+                              handleDeleteUnavailability(unavailability.id);
+                            }
+                          }}
+                          className="text-xs text-orange-500 hover:text-orange-700 hover:underline text-center"
+                        >
+                          Quitar ausencia
+                        </button>
                       )}
                     </div>
                   </div>
@@ -507,7 +546,7 @@ export function ServidorDashboard() {
               </div>
             </div>
             <p className="text-xs text-gray-400 mt-2">
-              Haz clic en un domingo futuro para marcar tu ausencia
+              Usa los enlaces para ver los servidores o marcar ausencia
             </p>
           </div>
         </div>
@@ -679,6 +718,13 @@ export function ServidorDashboard() {
           </div>
         </div>
       </Modal>
+
+      {/* Service Date Team Modal */}
+      <ServiceDateTeamModal
+        isOpen={isTeamModalOpen}
+        onClose={() => { setIsTeamModalOpen(false); setTeamViewDate(null); }}
+        date={teamViewDate}
+      />
     </div>
   );
 }
