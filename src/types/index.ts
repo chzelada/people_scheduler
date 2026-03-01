@@ -306,6 +306,35 @@ export interface AvailableSubstitute {
   last_name: string;
 }
 
+// Announcements
+export interface Announcement {
+  id: string;
+  title: string;
+  body: string;
+  banner_photo?: string;
+  publish_date: string;
+  expires_at: string;
+  created_by: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface CreateAnnouncementRequest {
+  title: string;
+  body: string;
+  banner_photo?: string;
+  publish_date: string;
+  expires_at: string;
+}
+
+export interface UpdateAnnouncementRequest {
+  title?: string;
+  body?: string;
+  banner_photo?: string | null;
+  publish_date?: string;
+  expires_at?: string;
+}
+
 // Liturgical reading
 export interface LiturgicalReading {
   reading_type: string;

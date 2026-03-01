@@ -1,3 +1,4 @@
+pub mod announcements;
 pub mod jobs;
 pub mod people;
 pub mod readings;
@@ -123,6 +124,19 @@ pub fn create_router(pool: PgPool) -> Router {
         .route(
             "/readings/by-date/{service_date_id}/fetch",
             post(readings::force_fetch_readings),
+        )
+        // Announcements routes
+        .route(
+            "/announcements/active",
+            get(announcements::get_active),
+        )
+        .route(
+            "/announcements",
+            get(announcements::get_all).post(announcements::create),
+        )
+        .route(
+            "/announcements/{id}",
+            put(announcements::update).delete(announcements::delete),
         )
         // Reports routes
         .route("/reports/fairness", get(reports::get_fairness_scores))

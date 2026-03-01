@@ -9,6 +9,7 @@ import { ServiceDateTeamModal } from '../components/schedule/ServiceDateTeamModa
 import { AvailableSubstitutesModal } from '../components/schedule/AvailableSubstitutesModal';
 import { ReadingModal } from '../components/schedule/ReadingModal';
 import { AllReadingsModal } from '../components/schedule/AllReadingsModal';
+import { AnnouncementsSection } from '../components/announcements/AnnouncementsSection';
 import type { Unavailability, Person } from '../types';
 
 export function ServidorDashboard() {
@@ -364,6 +365,9 @@ export function ServidorDashboard() {
             </p>
           </div>
         )}
+
+        {/* Announcements */}
+        <AnnouncementsSection />
 
         {/* Upcoming List */}
         {remainingUpcoming.length > 0 && (

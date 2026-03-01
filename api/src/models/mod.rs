@@ -337,6 +337,41 @@ pub struct LiturgicalReading {
     pub expires_at: Option<DateTime<Utc>>,
 }
 
+// ============ Announcements ============
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct Announcement {
+    pub id: String,
+    pub title: String,
+    pub body: String,
+    pub banner_photo: Option<String>,
+    pub publish_date: NaiveDate,
+    pub expires_at: NaiveDate,
+    pub created_by: String,
+    pub created_at: Option<DateTime<Utc>>,
+    pub updated_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreateAnnouncement {
+    pub title: String,
+    pub body: String,
+    #[serde(default, deserialize_with = "deserialize_optional_string")]
+    pub banner_photo: Option<String>,
+    pub publish_date: NaiveDate,
+    pub expires_at: NaiveDate,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateAnnouncement {
+    #[serde(default, deserialize_with = "deserialize_optional_string")]
+    pub title: Option<String>,
+    pub body: Option<String>,
+    pub banner_photo: Option<String>,
+    pub publish_date: Option<NaiveDate>,
+    pub expires_at: Option<NaiveDate>,
+}
+
 // ============ Schedule with full details ============
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

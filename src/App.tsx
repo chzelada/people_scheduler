@@ -9,12 +9,13 @@ import {
   SiblingGroups,
   Reports,
   Settings,
+  AnnouncementsManagement,
 } from "./pages";
 import { ServidorDashboard } from "./pages/ServidorDashboard";
 import { Login } from "./pages/Login";
 import { useAuthStore } from "./stores/authStore";
 
-type Page = 'dashboard' | 'people' | 'schedule' | 'unavailability' | 'siblings' | 'reports' | 'settings';
+type Page = 'dashboard' | 'people' | 'schedule' | 'unavailability' | 'siblings' | 'announcements' | 'reports' | 'settings';
 
 const pageLabels: Record<Page, string> = {
   dashboard: 'Inicio',
@@ -22,6 +23,7 @@ const pageLabels: Record<Page, string> = {
   schedule: 'Horarios',
   unavailability: 'Ausencias',
   siblings: 'Grupos Familiares',
+  announcements: 'Sección Informativa',
   reports: 'Reportes',
   settings: 'Configuración',
 };
@@ -53,6 +55,8 @@ function App() {
         return <UnavailabilityManagement />;
       case 'siblings':
         return <SiblingGroups />;
+      case 'announcements':
+        return <AnnouncementsManagement />;
       case 'reports':
         return <Reports />;
       case 'settings':

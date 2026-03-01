@@ -23,6 +23,9 @@ import type {
   ServiceDateJobGroup,
   AvailableSubstitute,
   LiturgicalReading,
+  Announcement,
+  CreateAnnouncementRequest,
+  UpdateAnnouncementRequest,
 } from '../types';
 import { useAuthStore } from '../stores/authStore';
 
@@ -273,6 +276,15 @@ export const readingsApi = {
     get<LiturgicalReading[]>(`/readings/by-calendar-date/${date}`),
   forceFetch: (serviceDateId: string) =>
     post<LiturgicalReading[]>(`/readings/by-date/${serviceDateId}/fetch`),
+};
+
+// Announcements API
+export const announcementsApi = {
+  getAll: () => get<Announcement[]>('/announcements'),
+  getActive: () => get<Announcement[]>('/announcements/active'),
+  create: (request: CreateAnnouncementRequest) => post<Announcement>('/announcements', request),
+  update: (id: string, request: UpdateAnnouncementRequest) => put<Announcement>(`/announcements/${id}`, request),
+  delete: (id: string) => del<void>(`/announcements/${id}`),
 };
 
 // Export API - not available in web version

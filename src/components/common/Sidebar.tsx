@@ -7,6 +7,7 @@ import {
   BarChart3,
   Settings,
   UsersRound,
+  Megaphone,
   LogOut,
   User,
   X
@@ -14,7 +15,7 @@ import {
 import { useAuthStore } from '../../stores/authStore';
 import { ThemeToggle } from './ThemeToggle';
 
-type Page = 'dashboard' | 'people' | 'schedule' | 'unavailability' | 'siblings' | 'reports' | 'settings';
+type Page = 'dashboard' | 'people' | 'schedule' | 'unavailability' | 'siblings' | 'announcements' | 'reports' | 'settings';
 
 interface SidebarProps {
   currentPage: Page;
@@ -29,6 +30,7 @@ const navItems: { id: Page; label: string; icon: React.ComponentType<{ className
   { id: 'schedule', label: 'Horarios', icon: Calendar },
   { id: 'unavailability', label: 'Ausencias', icon: CalendarOff },
   { id: 'siblings', label: 'Grupos Familiares', icon: UsersRound },
+  { id: 'announcements', label: 'Sección Informativa', icon: Megaphone },
   { id: 'reports', label: 'Reportes', icon: BarChart3 },
   { id: 'settings', label: 'Configuración', icon: Settings },
 ];

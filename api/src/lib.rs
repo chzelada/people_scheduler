@@ -133,6 +133,19 @@ pub async fn init_database(pool: &PgPool) -> Result<(), Box<dyn std::error::Erro
     .await
     .ok();
 
+    // Migration 012: Add announcements table
+    sqlx::query(include_str!(
+        "../../migrations-postgres/012_add_announcements.sql"
+    ))
+    .execute(pool)
+    .await
+    .ok();
+
+    sqlx::query("CREATE INDEX IF NOT EXISTS idx_announcements_dates ON announcements(publish_date, expires_at)")
+        .execute(pool)
+        .await
+        .ok();
+
     // Initialize admin user if not exists
     auth::init_admin_user(pool).await?;
 
