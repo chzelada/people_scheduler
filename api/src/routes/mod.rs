@@ -1,5 +1,6 @@
 pub mod jobs;
 pub mod people;
+pub mod readings;
 pub mod reports;
 pub mod schedules;
 pub mod sibling_groups;
@@ -105,6 +106,23 @@ pub fn create_router(pool: PgPool) -> Router {
         .route(
             "/sibling-groups/{id}",
             put(sibling_groups::update).delete(sibling_groups::delete),
+        )
+        // Readings routes
+        .route(
+            "/readings/by-date/{service_date_id}",
+            get(readings::get_readings_by_date),
+        )
+        .route(
+            "/my-reading/{service_date_id}/{position}",
+            get(readings::get_my_reading),
+        )
+        .route(
+            "/readings/by-calendar-date/{date}",
+            get(readings::get_readings_by_calendar_date),
+        )
+        .route(
+            "/readings/by-date/{service_date_id}/fetch",
+            post(readings::force_fetch_readings),
         )
         // Reports routes
         .route("/reports/fairness", get(reports::get_fairness_scores))

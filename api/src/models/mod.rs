@@ -321,6 +321,22 @@ pub struct PersonHistoryEntry {
     pub position_name: Option<String>,
 }
 
+// ============ Liturgical Readings ============
+
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct LiturgicalReading {
+    pub id: String,
+    pub service_date_id: String,
+    pub reading_type: String,
+    pub reference: String,
+    pub body: String,
+    pub source_url: Option<String>,
+    pub fetched_at: Option<DateTime<Utc>>,
+    pub created_at: Option<DateTime<Utc>>,
+    pub updated_at: Option<DateTime<Utc>>,
+    pub expires_at: Option<DateTime<Utc>>,
+}
+
 // ============ Schedule with full details ============
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

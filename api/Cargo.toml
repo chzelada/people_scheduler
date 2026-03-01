@@ -41,6 +41,12 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 lambda_http = "0.14"
 lambda_runtime = "0.14"
 
+# HTTP client for fetching readings
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+
+# HTML parsing
+scraper = "0.22"
+
 # Environment variables
 dotenvy = "0.15"
 

@@ -271,6 +271,13 @@ pub async fn generate(
         });
     }
 
+    // Background: fetch liturgical readings for all service dates
+    let bg_pool = pool.clone();
+    let bg_schedule_id = schedule_id.clone();
+    tokio::spawn(async move {
+        super::readings::fetch_readings_for_schedule(bg_pool, bg_schedule_id).await;
+    });
+
     Ok(Json(ScheduleWithDates {
         schedule,
         service_dates: dates_with_assignments,
@@ -1009,6 +1016,7 @@ pub async fn export_excel(
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct MyAssignment {
     pub service_date: NaiveDate,
+    pub service_date_id: String,
     pub job_id: String,
     pub job_name: String,
     pub job_color: String,
@@ -1028,6 +1036,7 @@ pub async fn get_my_assignments(
             NaiveDate,
             String,
             String,
+            String,
             Option<String>,
             Option<i32>,
             Option<String>,
@@ -1036,6 +1045,7 @@ pub async fn get_my_assignments(
         r#"
         SELECT
             sd.service_date,
+            sd.id as service_date_id,
             j.id as job_id,
             j.name as job_name,
             j.color as job_color,
@@ -1061,8 +1071,9 @@ pub async fn get_my_assignments(
     let assignments: Vec<MyAssignment> = rows
         .into_iter()
         .map(
-            |(service_date, job_id, job_name, job_color, position, position_name)| MyAssignment {
+            |(service_date, service_date_id, job_id, job_name, job_color, position, position_name)| MyAssignment {
                 service_date,
+                service_date_id,
                 job_id,
                 job_name,
                 job_color: job_color.unwrap_or_else(|| "#3B82F6".to_string()),

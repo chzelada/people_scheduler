@@ -4,3 +4,5 @@ export { ConflictList } from './ConflictList';
 export { EditAssignmentModal } from './EditAssignmentModal';
 export { DraggableAssignment } from './DraggableAssignment';
 export { DroppableSlot } from './DroppableSlot';
+export { ReadingModal } from './ReadingModal';
+export { AllReadingsModal } from './AllReadingsModal';

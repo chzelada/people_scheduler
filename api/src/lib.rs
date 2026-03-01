@@ -117,6 +117,22 @@ pub async fn init_database(pool: &PgPool) -> Result<(), Box<dyn std::error::Erro
         Err(e) => tracing::warn!("Migration 009e: {}", e),
     }
 
+    // Migration 010: Add liturgical_readings table
+    sqlx::query(include_str!(
+        "../../migrations-postgres/010_add_readings.sql"
+    ))
+    .execute(pool)
+    .await
+    .ok();
+
+    // Migration 011: Add expires_at column to liturgical_readings
+    sqlx::query(include_str!(
+        "../../migrations-postgres/011_add_readings_expires_at.sql"
+    ))
+    .execute(pool)
+    .await
+    .ok();
+
     // Initialize admin user if not exists
     auth::init_admin_user(pool).await?;
 

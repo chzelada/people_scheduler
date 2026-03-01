@@ -22,6 +22,7 @@ import type {
   CompletenessResponse,
   ServiceDateJobGroup,
   AvailableSubstitute,
+  LiturgicalReading,
 } from '../types';
 import { useAuthStore } from '../stores/authStore';
 
@@ -132,6 +133,7 @@ export const jobsApi = {
 // My Assignment type for servidor view
 export interface MyAssignment {
   service_date: string;
+  service_date_id: string;
   job_id: string;
   job_name: string;
   job_color: string;
@@ -259,6 +261,18 @@ export const myUnavailabilityApi = {
   create: (dates: string[], reason?: string) =>
     post<Unavailability[]>('/my-unavailability', { dates, reason }),
   delete: (id: string) => del<void>(`/my-unavailability/${id}`),
+};
+
+// Readings API
+export const readingsApi = {
+  getMyReading: (serviceDateId: string, positionName: string) =>
+    get<LiturgicalReading | null>(`/my-reading/${serviceDateId}/${encodeURIComponent(positionName)}`),
+  getByDate: (serviceDateId: string) =>
+    get<LiturgicalReading[]>(`/readings/by-date/${serviceDateId}`),
+  getByCalendarDate: (date: string) =>
+    get<LiturgicalReading[]>(`/readings/by-calendar-date/${date}`),
+  forceFetch: (serviceDateId: string) =>
+    post<LiturgicalReading[]>(`/readings/by-date/${serviceDateId}/fetch`),
 };
 
 // Export API - not available in web version

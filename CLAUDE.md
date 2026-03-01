@@ -196,6 +196,11 @@ Auto-created on first run:
 - Shows all assignments per date (not just one) — hero card, upcoming list, and calendar all support multiple assignments on the same Sunday
 - `getAssignmentsForDate()` returns array (uses `.filter()` not `.find()`)
 - Hero card groups all assignments for the nearest upcoming date with multiple colored badges
+- **Buscar reemplazo**: On future Sundays with assignments, servidores can search for available substitutes
+  - Calls `GET /api/available-substitutes/{date}/{job_id}` per job
+  - Returns only `first_name` and `last_name` (privacy-safe)
+  - Filters: active, qualified for job, not unavailable, not already assigned that date, no exclusion flags
+  - Component: `AvailableSubstitutesModal.tsx`, grouped by job with colored headers
 
 ### Theme System
 - Two themes available: **Navy/Gold** (San Martín parish branding) and **Blue** (original)
@@ -210,7 +215,7 @@ Auto-created on first run:
 
 All protected routes under `/api/*` require JWT in Authorization header (`Bearer <token>`).
 - `POST /login` - Returns JWT token
-- `/api/people`, `/api/jobs`, `/api/schedules`, `/api/unavailability`, `/api/sibling-groups`, `/api/reports`
+- `/api/people`, `/api/jobs`, `/api/schedules`, `/api/unavailability`, `/api/sibling-groups`, `/api/reports`, `/api/available-substitutes`
 - See `api/src/routes/mod.rs` for complete route registration
 
 ## Adding New Features

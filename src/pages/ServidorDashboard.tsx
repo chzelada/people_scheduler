@@ -1,12 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { format, parseISO, isSameMonth, startOfMonth, addMonths, subMonths, eachDayOfInterval, startOfWeek, endOfWeek, endOfMonth, isToday, isSameDay, isSunday } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Calendar, ChevronLeft, ChevronRight, Star, LogOut, Key, XCircle, CalendarX, Trash2, Camera, Users } from 'lucide-react';
+import { Calendar, ChevronLeft, ChevronRight, Star, LogOut, Key, XCircle, CalendarX, Trash2, Camera, Users, BookOpen } from 'lucide-react';
 import { scheduleApi, myUnavailabilityApi, myPhotoApi, peopleApi, MyAssignment } from '../services/api';
 import { useAuthStore } from '../stores/authStore';
 import { Button, Modal, Input, Avatar, PhotoUpload } from '../components/common';
 import { ServiceDateTeamModal } from '../components/schedule/ServiceDateTeamModal';
 import { AvailableSubstitutesModal } from '../components/schedule/AvailableSubstitutesModal';
+import { ReadingModal } from '../components/schedule/ReadingModal';
+import { AllReadingsModal } from '../components/schedule/AllReadingsModal';
 import type { Unavailability, Person } from '../types';
 
 export function ServidorDashboard() {
@@ -38,6 +40,16 @@ export function ServidorDashboard() {
   const [isSubstitutesModalOpen, setIsSubstitutesModalOpen] = useState(false);
   const [substitutesDate, setSubstitutesDate] = useState<string | null>(null);
   const [substitutesJobs, setSubstitutesJobs] = useState<{job_id: string, job_name: string, job_color: string}[]>([]);
+
+  // Reading modal state (single reading for Lectores)
+  const [isReadingModalOpen, setIsReadingModalOpen] = useState(false);
+  const [readingServiceDateId, setReadingServiceDateId] = useState<string | null>(null);
+  const [readingPositionName, setReadingPositionName] = useState<string | null>(null);
+  const [readingDate, setReadingDate] = useState<string | null>(null);
+
+  // All readings modal state
+  const [isAllReadingsOpen, setIsAllReadingsOpen] = useState(false);
+  const [allReadingsDate, setAllReadingsDate] = useState<string | null>(null);
 
   useEffect(() => {
     if (user?.person_id) {
@@ -121,6 +133,25 @@ export function ServidorDashboard() {
   const handleViewTeam = (date: Date) => {
     setTeamViewDate(format(date, 'yyyy-MM-dd'));
     setIsTeamModalOpen(true);
+  };
+
+  // Check if an assignment is a Lectores reading position (not Monitor)
+  const isLectoresReading = (a: MyAssignment) => {
+    return a.job_name.toLowerCase() === 'lectores' &&
+      a.position_name &&
+      a.position_name.toLowerCase() !== 'monitor';
+  };
+
+  const handleViewReading = (a: MyAssignment) => {
+    setReadingServiceDateId(a.service_date_id);
+    setReadingPositionName(a.position_name || null);
+    setReadingDate(a.service_date);
+    setIsReadingModalOpen(true);
+  };
+
+  const handleViewAllReadings = (date: string) => {
+    setAllReadingsDate(date);
+    setIsAllReadingsOpen(true);
   };
 
   const handleSearchSubstitutes = (date: Date, dayAssignments: MyAssignment[]) => {
@@ -284,18 +315,35 @@ export function ServidorDashboard() {
                 </p>
                 <div className="flex flex-wrap justify-center gap-2">
                   {nextAssignments.map((a, idx) => (
-                    <div
-                      key={idx}
-                      className="inline-block px-6 py-3 rounded-full text-white text-lg font-semibold"
-                      style={{ backgroundColor: a.job_color }}
-                    >
-                      {a.job_name}
-                      {a.position_name && (
-                        <span className="ml-2 opacity-90">- {a.position_name}</span>
+                    <div key={idx} className="flex flex-col items-center gap-1">
+                      <div
+                        className="inline-block px-6 py-3 rounded-full text-white text-lg font-semibold"
+                        style={{ backgroundColor: a.job_color }}
+                      >
+                        {a.job_name}
+                        {a.position_name && (
+                          <span className="ml-2 opacity-90">- {a.position_name}</span>
+                        )}
+                      </div>
+                      {isLectoresReading(a) && (
+                        <button
+                          onClick={() => handleViewReading(a)}
+                          className="inline-flex items-center gap-1 px-3 py-1 text-sm font-medium text-primary-700 bg-primary-50 hover:bg-primary-100 rounded-full transition-colors"
+                        >
+                          <BookOpen className="w-3.5 h-3.5" />
+                          Ver mi lectura
+                        </button>
                       )}
                     </div>
                   ))}
                 </div>
+                <button
+                  onClick={() => handleViewAllReadings(nextAssignments[0].service_date)}
+                  className="inline-flex items-center gap-1.5 mt-3 px-4 py-2 text-sm font-medium text-purple-700 bg-purple-50 hover:bg-purple-100 rounded-full transition-colors"
+                >
+                  <BookOpen className="w-4 h-4" />
+                  Ver lecturas del día
+                </button>
               </div>
             </div>
           </div>
@@ -342,6 +390,22 @@ export function ServidorDashboard() {
                       <p className="text-sm text-gray-500">
                         {assignment.position_name || 'Sin posición asignada'}
                       </p>
+                      {isLectoresReading(assignment) && (
+                        <button
+                          onClick={() => handleViewReading(assignment)}
+                          className="inline-flex items-center gap-1 text-xs text-primary-600 hover:text-primary-800 hover:underline mt-0.5"
+                        >
+                          <BookOpen className="w-3 h-3" />
+                          Ver mi lectura
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleViewAllReadings(assignment.service_date)}
+                        className="inline-flex items-center gap-1 text-xs text-purple-600 hover:text-purple-800 hover:underline mt-0.5"
+                      >
+                        <BookOpen className="w-3 h-3" />
+                        Ver lecturas del día
+                      </button>
                     </div>
                   </div>
                   <span
@@ -504,6 +568,23 @@ export function ServidorDashboard() {
 
                     {/* Action links */}
                     <div className="px-2 py-2 border-t border-gray-100 flex flex-col gap-1">
+                      {dayAssignments.filter(isLectoresReading).map((a, idx) => (
+                        <button
+                          key={`reading-${idx}`}
+                          onClick={() => handleViewReading(a)}
+                          className="text-xs text-purple-600 hover:text-purple-800 hover:underline text-center inline-flex items-center justify-center gap-0.5"
+                        >
+                          <BookOpen className="w-3 h-3" />
+                          Mi lectura
+                        </button>
+                      ))}
+                      <button
+                        onClick={() => handleViewAllReadings(format(day, 'yyyy-MM-dd'))}
+                        className="text-xs text-indigo-600 hover:text-indigo-800 hover:underline text-center inline-flex items-center justify-center gap-0.5"
+                      >
+                        <BookOpen className="w-3 h-3" />
+                        Lecturas
+                      </button>
                       <button
                         onClick={() => handleViewTeam(day)}
                         className="text-xs text-primary-600 hover:text-primary-800 hover:underline text-center"
@@ -756,6 +837,22 @@ export function ServidorDashboard() {
         onClose={() => { setIsSubstitutesModalOpen(false); setSubstitutesDate(null); setSubstitutesJobs([]); }}
         date={substitutesDate}
         jobs={substitutesJobs}
+      />
+
+      {/* Reading Modal */}
+      <ReadingModal
+        isOpen={isReadingModalOpen}
+        onClose={() => { setIsReadingModalOpen(false); setReadingServiceDateId(null); setReadingPositionName(null); setReadingDate(null); }}
+        serviceDateId={readingServiceDateId}
+        positionName={readingPositionName}
+        date={readingDate}
+      />
+
+      {/* All Readings Modal */}
+      <AllReadingsModal
+        isOpen={isAllReadingsOpen}
+        onClose={() => { setIsAllReadingsOpen(false); setAllReadingsDate(null); }}
+        date={allReadingsDate}
       />
     </div>
   );

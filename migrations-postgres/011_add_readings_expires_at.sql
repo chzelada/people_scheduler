@@ -1,0 +1,1 @@
+ALTER TABLE liturgical_readings ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ DEFAULT (NOW() + INTERVAL '7 days');

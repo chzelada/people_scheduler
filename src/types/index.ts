@@ -305,3 +305,11 @@ export interface AvailableSubstitute {
   first_name: string;
   last_name: string;
 }
+
+// Liturgical reading
+export interface LiturgicalReading {
+  reading_type: string;
+  reference: string;
+  body: string;
+  source_url?: string;
+}
