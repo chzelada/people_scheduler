@@ -6,6 +6,7 @@ import { scheduleApi, myUnavailabilityApi, myPhotoApi, peopleApi, MyAssignment }
 import { useAuthStore } from '../stores/authStore';
 import { Button, Modal, Input, Avatar, PhotoUpload } from '../components/common';
 import { ServiceDateTeamModal } from '../components/schedule/ServiceDateTeamModal';
+import { AvailableSubstitutesModal } from '../components/schedule/AvailableSubstitutesModal';
 import type { Unavailability, Person } from '../types';
 
 export function ServidorDashboard() {
@@ -32,6 +33,11 @@ export function ServidorDashboard() {
   // Team view state
   const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
   const [teamViewDate, setTeamViewDate] = useState<string | null>(null);
+
+  // Substitutes view state
+  const [isSubstitutesModalOpen, setIsSubstitutesModalOpen] = useState(false);
+  const [substitutesDate, setSubstitutesDate] = useState<string | null>(null);
+  const [substitutesJobs, setSubstitutesJobs] = useState<{job_id: string, job_name: string, job_color: string}[]>([]);
 
   useEffect(() => {
     if (user?.person_id) {
@@ -115,6 +121,16 @@ export function ServidorDashboard() {
   const handleViewTeam = (date: Date) => {
     setTeamViewDate(format(date, 'yyyy-MM-dd'));
     setIsTeamModalOpen(true);
+  };
+
+  const handleSearchSubstitutes = (date: Date, dayAssignments: MyAssignment[]) => {
+    setSubstitutesDate(format(date, 'yyyy-MM-dd'));
+    setSubstitutesJobs(dayAssignments.map(a => ({
+      job_id: a.job_id,
+      job_name: a.job_name,
+      job_color: a.job_color,
+    })));
+    setIsSubstitutesModalOpen(true);
   };
 
   const handleUploadPhoto = async (photoData: string) => {
@@ -494,6 +510,14 @@ export function ServidorDashboard() {
                       >
                         Ver servidores
                       </button>
+                      {isFutureSunday && hasAssignments && !unavailability && (
+                        <button
+                          onClick={() => handleSearchSubstitutes(day, dayAssignments)}
+                          className="text-xs text-amber-600 hover:text-amber-800 hover:underline text-center"
+                        >
+                          Buscar reemplazo
+                        </button>
+                      )}
                       {isFutureSunday && !unavailability && (
                         <button
                           onClick={() => handleSundayClick(day)}
@@ -724,6 +748,14 @@ export function ServidorDashboard() {
         isOpen={isTeamModalOpen}
         onClose={() => { setIsTeamModalOpen(false); setTeamViewDate(null); }}
         date={teamViewDate}
+      />
+
+      {/* Available Substitutes Modal */}
+      <AvailableSubstitutesModal
+        isOpen={isSubstitutesModalOpen}
+        onClose={() => { setIsSubstitutesModalOpen(false); setSubstitutesDate(null); setSubstitutesJobs([]); }}
+        date={substitutesDate}
+        jobs={substitutesJobs}
       />
     </div>
   );

@@ -21,6 +21,7 @@ import type {
   MoveAssignmentRequest,
   CompletenessResponse,
   ServiceDateJobGroup,
+  AvailableSubstitute,
 } from '../types';
 import { useAuthStore } from '../stores/authStore';
 
@@ -166,6 +167,8 @@ export const scheduleApi = {
   getFairnessScores: (year: number) => get<FairnessScore[]>(`/reports/fairness?year=${year}`),
   getMyAssignments: (personId: string) => get<MyAssignment[]>(`/my-assignments/${personId}`),
   getServiceDateTeam: (date: string) => get<ServiceDateJobGroup[]>(`/service-date-assignments/${date}`),
+  getAvailableSubstitutes: (date: string, jobId: string) =>
+    get<AvailableSubstitute[]>(`/available-substitutes/${date}/${jobId}`),
   getPersonAssignmentHistory: async (personId: string, _startDate: string, _endDate: string) => {
     const history = await get<PersonAssignmentDetail[]>(`/reports/person/${personId}/history`);
     return history;

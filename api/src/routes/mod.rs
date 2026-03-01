@@ -77,6 +77,10 @@ pub fn create_router(pool: PgPool) -> Router {
             "/service-date-assignments/{date}",
             get(schedules::get_service_date_team),
         )
+        .route(
+            "/available-substitutes/{date}/{job_id}",
+            get(schedules::get_available_substitutes),
+        )
         // Unavailability routes (admin)
         .route(
             "/unavailability",

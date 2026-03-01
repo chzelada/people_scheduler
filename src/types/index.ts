@@ -299,3 +299,9 @@ export interface GetEligiblePeopleRequest {
   service_date: string;
   current_person_id?: string;
 }
+
+// Available substitute for replacement search
+export interface AvailableSubstitute {
+  first_name: string;
+  last_name: string;
+}

@@ -1739,6 +1739,87 @@ pub async fn move_assignment(
     Err((StatusCode::NOT_FOUND, "Target slot not found".to_string()))
 }
 
+// ============ Get Available Substitutes ============
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct AvailableSubstitute {
+    pub first_name: String,
+    pub last_name: String,
+}
+
+pub async fn get_available_substitutes(
+    State(pool): State<PgPool>,
+    Path((date, job_id)): Path<(String, String)>,
+) -> Result<Json<Vec<AvailableSubstitute>>, (StatusCode, String)> {
+    let parsed_date = NaiveDate::parse_from_str(&date, "%Y-%m-%d")
+        .map_err(|e| (StatusCode::BAD_REQUEST, format!("Invalid date format: {}", e)))?;
+
+    // Get the job name to check exclusion flags
+    let job_name: String = sqlx::query_scalar("SELECT name FROM jobs WHERE id = $1")
+        .bind(&job_id)
+        .fetch_optional(&pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or((StatusCode::NOT_FOUND, "Job not found".to_string()))?;
+
+    let job_name_lower = job_name.to_lowercase();
+    let is_monaguillo = job_name_lower == "monaguillos" || job_name_lower.starts_with("monaguillos jr");
+    let is_lector = job_name_lower == "lectores";
+
+    // Build the query with exclusion flag filters
+    let mut query = String::from(
+        r#"
+        SELECT p.first_name, p.last_name
+        FROM people p
+        JOIN person_jobs pj ON p.id = pj.person_id
+        WHERE p.active = true
+          AND pj.job_id = $1
+          -- Not unavailable on this date
+          AND NOT EXISTS (
+              SELECT 1 FROM unavailability u
+              WHERE u.person_id = p.id
+                AND u.start_date <= $2
+                AND u.end_date >= $2
+          )
+          -- Not already assigned on this date (in published schedules)
+          AND NOT EXISTS (
+              SELECT 1 FROM assignments a
+              JOIN service_dates sd ON a.service_date_id = sd.id
+              JOIN schedules s ON sd.schedule_id = s.id
+              WHERE a.person_id = p.id
+                AND sd.service_date = $2
+                AND s.status = 'PUBLISHED'
+          )
+        "#,
+    );
+
+    if is_monaguillo {
+        query.push_str(" AND p.exclude_monaguillos = false");
+    }
+    if is_lector {
+        query.push_str(" AND p.exclude_lectores = false");
+    }
+
+    query.push_str(" ORDER BY p.first_name, p.last_name");
+
+    let rows: Vec<(String, String)> = sqlx::query_as(&query)
+        .bind(&job_id)
+        .bind(parsed_date)
+        .fetch_all(&pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let substitutes: Vec<AvailableSubstitute> = rows
+        .into_iter()
+        .map(|(first_name, last_name)| AvailableSubstitute {
+            first_name,
+            last_name,
+        })
+        .collect();
+
+    Ok(Json(substitutes))
+}
+
 // ============ Get Schedule Completeness ============
 
 #[derive(Debug, serde::Serialize)]
