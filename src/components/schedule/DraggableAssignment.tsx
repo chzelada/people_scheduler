@@ -18,6 +18,20 @@ export function DraggableAssignment({ assignment, disabled = false, onClear }: D
     disabled,
   });
 
+  const [showInfo, setShowInfo] = React.useState(false);
+  const infoRef = React.useRef<HTMLSpanElement>(null);
+
+  React.useEffect(() => {
+    if (!showInfo) return;
+    const close = (e: PointerEvent) => {
+      if (infoRef.current && !infoRef.current.contains(e.target as Node)) {
+        setShowInfo(false);
+      }
+    };
+    document.addEventListener('pointerdown', close);
+    return () => document.removeEventListener('pointerdown', close);
+  }, [showInfo]);
+
   const style = transform ? {
     transform: CSS.Translate.toString(transform),
     zIndex: isDragging ? 50 : undefined,
@@ -50,11 +64,31 @@ export function DraggableAssignment({ assignment, disabled = false, onClear }: D
               </span>
               {POSITION_DESCRIPTIONS[assignment.position_name] && (
                 <span
+                  ref={infoRef}
                   className="relative group/info flex-shrink-0"
                   onPointerDown={(e) => e.stopPropagation()}
                 >
-                  <Info className="w-3.5 h-3.5 text-gray-400 hover:text-blue-500 cursor-help" />
-                  <span className="hidden group-hover/info:block absolute left-1/2 -translate-x-1/2 bottom-full mb-1 z-50 w-max max-w-[220px] rounded bg-gray-900 px-2 py-1 text-xs font-normal text-white shadow-lg whitespace-normal">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      setShowInfo((v) => !v);
+                    }}
+                    className="flex items-center p-0.5 -m-0.5"
+                    aria-label={`Información de ${assignment.position_name}`}
+                  >
+                    <Info
+                      className={`w-3.5 h-3.5 cursor-help ${
+                        showInfo ? 'text-blue-500' : 'text-gray-400 hover:text-blue-500'
+                      }`}
+                    />
+                  </button>
+                  <span
+                    className={`${
+                      showInfo ? 'block' : 'hidden group-hover/info:block'
+                    } absolute left-0 bottom-full mb-1 z-50 w-max max-w-[220px] rounded bg-gray-900 px-2 py-1 text-xs font-normal text-white shadow-lg whitespace-normal`}
+                  >
                     {POSITION_DESCRIPTIONS[assignment.position_name]}
                   </span>
                 </span>
