@@ -1,8 +1,9 @@
 import React from 'react';
 import { useDraggable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
-import { GripVertical, X } from 'lucide-react';
+import { GripVertical, Info, X } from 'lucide-react';
 import type { Assignment } from '../../types';
+import { POSITION_DESCRIPTIONS } from './position-descriptions';
 
 interface DraggableAssignmentProps {
   assignment: Assignment;
@@ -43,8 +44,21 @@ export function DraggableAssignment({ assignment, disabled = false, onClear }: D
         )}
         <div className="flex flex-col min-w-0">
           {assignment.position_name && (
-            <span className="text-xs font-medium text-gray-500 truncate">
-              {assignment.position_name}
+            <span className="flex items-center gap-1 min-w-0">
+              <span className="text-xs font-medium text-gray-500 truncate">
+                {assignment.position_name}
+              </span>
+              {POSITION_DESCRIPTIONS[assignment.position_name] && (
+                <span
+                  className="relative group/info flex-shrink-0"
+                  onPointerDown={(e) => e.stopPropagation()}
+                >
+                  <Info className="w-3.5 h-3.5 text-gray-400 hover:text-blue-500 cursor-help" />
+                  <span className="hidden group-hover/info:block absolute left-1/2 -translate-x-1/2 bottom-full mb-1 z-50 w-max max-w-[220px] rounded bg-gray-900 px-2 py-1 text-xs font-normal text-white shadow-lg whitespace-normal">
+                    {POSITION_DESCRIPTIONS[assignment.position_name]}
+                  </span>
+                </span>
+              )}
             </span>
           )}
           <span className="text-sm text-gray-900 truncate">
