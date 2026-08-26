@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Plus, Download, Send, Trash2, AlertCircle, XCircle, CheckCircle } from 'lucide-react';
-import { Button, Modal } from '../components/common';
+import { Button, Modal, Input } from '../components/common';
 import { ScheduleCalendar, ScheduleGenerator, ConflictList, EditAssignmentModal } from '../components/schedule';
 import { useScheduleStore } from '../stores/scheduleStore';
 import { useJobsStore } from '../stores/jobsStore';
@@ -67,6 +67,7 @@ export function ScheduleView() {
   const [isPublishing, setIsPublishing] = useState(false);
   const [showConfirmPublish, setShowConfirmPublish] = useState(false);
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Edit assignment state
@@ -155,11 +156,13 @@ export function ScheduleView() {
   };
 
   const handleDelete = () => {
+    setDeleteConfirmText('');
     setShowConfirmDelete(true);
   };
 
   const confirmDelete = async () => {
     if (!currentSchedule) return;
+    if (deleteConfirmText.trim() !== currentSchedule.name) return;
     setShowConfirmDelete(false);
     try {
       await deleteSchedule(currentSchedule.id);
@@ -551,14 +554,35 @@ export function ScheduleView() {
         title="Confirmar Eliminacion"
       >
         <div className="space-y-4">
-          <p className="text-gray-600">
-            Esta seguro de eliminar este horario? Esta accion no se puede deshacer.
-          </p>
+          <div className="flex items-start space-x-3">
+            <AlertCircle className="w-6 h-6 text-red-500 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-gray-700 font-medium">
+                Esta a punto de eliminar el horario {currentSchedule?.name}.
+              </p>
+              <p className="text-sm text-gray-500 mt-1">
+                Se borraran todas sus asignaciones, lecturas e historial. Esta accion no se puede deshacer.
+              </p>
+            </div>
+          </div>
+          <Input
+            label={`Para confirmar, escriba el nombre del horario: ${currentSchedule?.name ?? ''}`}
+            value={deleteConfirmText}
+            onChange={(e) => setDeleteConfirmText(e.target.value)}
+            placeholder={currentSchedule?.name ?? ''}
+            autoFocus
+            autoComplete="off"
+            spellCheck={false}
+          />
           <div className="flex justify-end space-x-3">
             <Button variant="secondary" onClick={() => setShowConfirmDelete(false)}>
               Cancelar
             </Button>
-            <Button variant="danger" onClick={confirmDelete}>
+            <Button
+              variant="danger"
+              onClick={confirmDelete}
+              disabled={deleteConfirmText.trim() !== currentSchedule?.name}
+            >
               Si, Eliminar
             </Button>
           </div>
